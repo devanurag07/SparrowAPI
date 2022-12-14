@@ -65,21 +65,24 @@ class ConversationAPI(ModelViewSet):
         return Response(resp_fail("Conversation ID Required."))
     
 class ChatAPI(ModelViewSet):
-    permission_classe=[IsAuthenticated]
+    permission_classes=[IsAuthenticated]
     serializer_class=MessageSerializer
     
     def get_queryset(self):
-        return super().get_queryset()
+        queryset=Message.objects.filter(sender=self.request.user)
+        return queryset
 
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
-    
+        
     def create(self, request, *args, **kwargs):
         data=request.data
         success,req_data=required_data(data,["mobile","message"])
         if(not success):
             return Response(resp_fail("[Mobile , Message] Required.."))
         
+        
+        mobile,message=req_data
         user=request.user
         receivers=User.objects.filter(mobile=mobile)
         if(receivers.exists()):
@@ -88,12 +91,21 @@ class ChatAPI(ModelViewSet):
             return Response(resp_fail("Reciever Doesn't Exist"))
         
         mobile,message=req_data
-        created,conv=Conversation.objects.get_or_create(Q(user1=user,user2=reciever)| Q(user1=user,user2=user))
+        conv=Conversation.objects.filter(Q(user1=user,user2=reciever)| Q(user1=user,user2=user))
+        if(conv.exists()):
+            created=False
+            conv=conv.first()
+        else:
+            created=True
+            conv=Conversation.objects.create(user1=user,user2=reciever)
+            
+            
         message=Message(conversation=conv,sender=user,reciever=reciever,message=message)
         message.save()
         
         return Response(resp_success("Msg Sent...",{
-            "data":MessageSerializer(message,many=False).data
+            "data":MessageSerializer(message,many=False).data,
+            "created":created
         }))
 
     def update(self, request, *args, **kwargs):

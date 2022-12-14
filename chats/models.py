@@ -5,8 +5,8 @@ from accounts.models import User
 
 
 class Conversation(models.Model):
-    user1=models.ForeignKey(User,on_delete=models.CASCADE,related_name="convs")
-    user2=models.ForeignKey(User,on_delete=models.CASCADE,related_name="convs")
+    user1=models.ForeignKey(User,on_delete=models.CASCADE,related_name="convs1")
+    user2=models.ForeignKey(User,on_delete=models.CASCADE,related_name="convs2")
     created_at=models.DateTimeField(auto_now_add=True)
     
 class Message(models.Model):

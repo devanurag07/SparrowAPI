@@ -14,3 +14,4 @@ class MessageSerializer(ModelSerializer):
     class Meta:
         model=Message
         fields="__all__"
+        
