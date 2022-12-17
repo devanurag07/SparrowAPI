@@ -4,12 +4,12 @@ from rest_framework.viewsets import ModelViewSet
 from .serializers import ConversationSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
-from .models import Conversation,Message
+from .models import Conversation,Message,Status
 from sparrow.utils import resp_fail,resp_success
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from sparrow.utils import required_data
-from .serializers import MessageSerializer
+from .serializers import MessageSerializer,StatusSerializer
 from accounts.models import User
 
 # Create your views here.
@@ -27,7 +27,8 @@ class ConversationAPI(ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         conversations=self.get_queryset()
-        data=ConversationSerializer(conversations,many=True).data
+        data=ConversationSerializer(conversations,many=True,context={
+            "request":request}).data
         return Response(resp_success("Conversations Fetched Successfully",{
           "data":data  
         }))
@@ -37,7 +38,7 @@ class ConversationAPI(ModelViewSet):
             return Response(resp_fail("Conversation ID Required.."))
 
         conv=self.get_queryset().filter(pk=pk)
-        if(conv.exists()):
+        if(not conv.exists()):
             return Response(resp_fail("Conversation Does Not Exist..."))
         conv=conv.first()
         
@@ -113,3 +114,26 @@ class ChatAPI(ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
+    
+
+class StatusAPI(ModelViewSet):
+    serializer_class=StatusSerializer
+    permission_classes=[IsAuthenticated]
+    
+    def get_queryset(self):
+        return Status.objects.filter(user=self.request.user)
+    
+    def create(self, request, *args, **kwargs):
+        request.data["user"]=request.user.id
+        status_form=StatusSerializer(data=request.data)
+        if(status_form.is_valid()):
+            status=status_form.save()
+            return Response(resp_success("Status Uploaded Successfully",{
+                "data":status_form.data
+            }))
+        else:
+            return Response(resp_fail("Failed To Upload Status",{
+                "errors":status_form.errors
+            }))
+        
+        
