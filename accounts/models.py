@@ -41,7 +41,7 @@ class User(AbstractUser):
 class OtpTempData(models.Model):
     first_name=models.CharField(max_length=255)
     last_name=models.CharField(max_length=255)
-    mobile=models.IntegerField(max_length=255)
+    mobile=models.IntegerField()
     attempts = models.IntegerField(default=0)
     otp=models.IntegerField()
     created_at = models.DateTimeField(
