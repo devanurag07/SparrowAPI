@@ -51,7 +51,7 @@ def verify_otp(users_list,mobile,otp):
             
             delete_otps(user_exist,mobile)
             token = RefreshToken.for_user(user)
-            return Response(resp_success(f"Token Fetched Successfully [{action}]", {
+            return Response(resp_success(f"{action} Successfully!", {
                 "refresh": str(token),
                 "token": str(token.access_token)
             }))
