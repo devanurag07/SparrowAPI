@@ -17,7 +17,7 @@ def send_otp(user_exist,mobile,data):
         otp=random.randint(10000,99999)
         otp_obj=LoginOtp(otp=otp,mobile=mobile)
         otp_obj.save()
-        return Response(resp_success("OTP Created Successfully [Login]",{"otp":otp,"mobile":mobile}))
+        return Response(resp_success("OTP Sent Successfully!",{"otp":otp,"mobile":mobile}))
     else:
         #SignUP
         success,req_data=required_data(data,["first_name","last_name"])
@@ -30,7 +30,7 @@ def send_otp(user_exist,mobile,data):
         otp_obj=OtpTempData(first_name=first_name,last_name=last_name,otp=otp,mobile=mobile)
         otp_obj.save()
 
-        return Response(resp_success("OTP Created Successfully [SignUp]",{"otp":otp,"mobile":mobile}))
+        return Response(resp_success("OTP Sent Successfully!",{"otp":otp,"mobile":mobile}))
 
 def verify_otp(users_list,mobile,otp):
     action=""
@@ -51,7 +51,7 @@ def verify_otp(users_list,mobile,otp):
             
             delete_otps(user_exist,mobile)
             token = RefreshToken.for_user(user)
-            return Response(resp_success(f"Token Fetched Successfully [{action}]", {
+            return Response(resp_success(f"{action} Successfully!", {
                 "refresh": str(token),
                 "token": str(token.access_token)
             }))
