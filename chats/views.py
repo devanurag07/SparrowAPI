@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from sparrow.utils import required_data
 from .serializers import MessageSerializer,StatusSerializer
 from accounts.models import User
-
+from rest_framework.decorators import action
 # Create your views here.
 class ConversationAPI(ModelViewSet):
     serializer_class=ConversationSerializer
@@ -42,13 +42,16 @@ class ConversationAPI(ModelViewSet):
             return Response(resp_fail("Conversation Does Not Exist..."))
         conv=conv.first()
         
-        class ConvSerializer(ConversationSerializer):
+        class ConvSerializer(serializers.ModelSerializer):
             messages=MessageSerializer(many=True)
+            
+            class Meta:
+                model=Conversation
+                fields="__all__"
         
-        conv_data=ConvSerializer(conv,many=False).data
-        return Response(resp_success("Conversation Fetched Successfully.",{
-            "data":conv_data
-        }))
+        conv_data=ConvSerializer(conv,many=False,context={
+            "request":request}).data
+        return Response(resp_success("Conversation Fetched Successfully.",conv_data))
             
     def update(self, request, *args, **kwargs):
         return Response(resp_fail("Methdod Not Allowed"))
@@ -64,6 +67,8 @@ class ConversationAPI(ModelViewSet):
             return Response(resp_fail("Conversation Not Found..."))
         
         return Response(resp_fail("Conversation ID Required."))
+    
+    
     
 class ChatAPI(ModelViewSet):
     permission_classes=[IsAuthenticated]
