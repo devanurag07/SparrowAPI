@@ -1,0 +1,11 @@
+asgiref==3.5.2
+Django==4.1.4
+django-rest-framework==0.1.0
+django-simple-history==3.2.0
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.2.2
+phonenumbers==8.13.2
+Pillow==9.3.0
+PyJWT==2.6.0
+pytz==2022.6
+sqlparse==0.4.3
