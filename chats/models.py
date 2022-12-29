@@ -55,9 +55,6 @@ class Status(models.Model):
 #     admins=models.ManyToManyField(User)
 #     created_by=models.ForeignKey(User,on_delete=models.CASCADE)
     
-    
-
-
 
 #WebSockets --Models
 class WSClient(models.Model):

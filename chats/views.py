@@ -122,7 +122,7 @@ class ChatAPI(ModelViewSet):
             return Response(resp_fail("Reciever Doesn't Exist"))
         
         mobile,message=req_data
-        conv=Conversation.objects.filter(Q(user1=user,user2=reciever)| Q(user1=user,user2=user))
+        conv=Conversation.objects.filter(Q(user1=user,user2=reciever)| Q(user1=reciever,user2=user))
         if(conv.exists()):
             created=False
             conv=conv.first()
