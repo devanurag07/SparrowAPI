@@ -21,7 +21,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'sparrow.settings')
 django_asgi_app = get_asgi_application()
 
 
-applications=ProtocolTypeRouter({
+application=ProtocolTypeRouter({
     "http":django_asgi_app,
     "websocket":AllowedHostsOriginValidator(
         AuthMiddlewareStack(

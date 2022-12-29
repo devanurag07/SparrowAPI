@@ -24,11 +24,7 @@ def get_user(validated_token):
 
 class JwtAuthMiddleware(BaseMiddleware):
 
-    def __init__(self,inner) -> None:
-        super().__init__()
-        self.inner=inner
-
-    async def __call__(self, scope,receive,send) -> Any:
+    async def __call__(self, scope,receive,send):
         close_old_connections()
         # Query Params
         qs=parse_qs(scope["query_string"].decode("utf8"))
