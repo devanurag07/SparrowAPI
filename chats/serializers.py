@@ -32,6 +32,7 @@ class ConversationSerializer(ModelSerializer):
     last_message=serializers.SerializerMethodField(read_only=True)
     avatar=serializers.SerializerMethodField(read_only=True)
     
+    
     def get_conv_name(self,instance):
         current_user=self.context["request"].user
         print(current_user)

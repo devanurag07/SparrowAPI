@@ -7,6 +7,7 @@ from accounts.models import User
 class Conversation(models.Model):
     user1=models.ForeignKey(User,on_delete=models.CASCADE,related_name="convs1")
     user2=models.ForeignKey(User,on_delete=models.CASCADE,related_name="convs2")
+    isArchived=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True)
     
 class Message(models.Model):
@@ -14,6 +15,8 @@ class Message(models.Model):
     sender=models.ForeignKey(User,on_delete=models.CASCADE,related_name="sent_messages")
     reciever=models.ForeignKey(User,on_delete=models.CASCADE,related_name="received_messages")
     message=models.TextField()
+    isStarred=models.BooleanField(default=False)
+
     
     STATUS_CHOICES=[
         (0,"SENT"),
@@ -52,5 +55,13 @@ class Status(models.Model):
 #     admins=models.ManyToManyField(User)
 #     created_by=models.ForeignKey(User,on_delete=models.CASCADE)
     
+    
+
+
+
+#WebSockets --Models
+class WSClient(models.Model):
+    user=models.ForeignKey(User,on_delete=models.CASCADE)
+    channel_id=models.TextField()
     
     

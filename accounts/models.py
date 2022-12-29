@@ -15,6 +15,8 @@ class User(AbstractUser):
     USERNAME_FIELD = 'mobile'
     
     REQUIRED_FIELDS = ["first_name", "last_name"]
+    
+    bio=models.TextField()
     objects = CustomUserManager()
 
     class GenderChoices(models.TextChoices):
