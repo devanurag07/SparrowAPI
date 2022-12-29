@@ -47,6 +47,31 @@ class ConversationAPI(ModelViewSet):
 
         class ConvSerializer(serializers.ModelSerializer):
             messages = MessageSerializer(many=True)
+            conv_name = serializers.SerializerMethodField(read_only=True)
+            receiver_info = serializers.SerializerMethodField(read_only=True)
+
+            def get_conv_name(self, instance):
+                current_user = self.context["request"].user
+                print(current_user)
+                if (current_user == instance.user1):
+                    return instance.user2.first_name + ' ' + instance.user2.last_name
+                else:
+                    return instance.user1.first_name + ' '+instance.user1.last_name
+
+            def get_receiver_info(self, instance):
+                receiver_user = None
+                current_user = self.context["request"].user
+                if (current_user == instance.user1):
+                    receiver_user = instance.user2
+                else:
+                    receiver_user = instance.user1
+
+                data = {
+                    "receiver_name": receiver_user.first_name+" "+receiver_user.last_name,
+                    "bio": receiver_user.bio,
+                    "mobile": receiver_user.mobile
+                }
+                return data
 
             class Meta:
                 model = Conversation
