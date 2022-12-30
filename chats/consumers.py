@@ -1,13 +1,14 @@
-from channels.generic.websocket import AsyncJsonWebsocketConsumer,WebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer, WebsocketConsumer
 import json
 from sparrow.utils import get_model
 from accounts.models import User
 from .models import WSClient
 from channels.db import database_sync_to_async
-from .models import Message,Status
+from .models import Message, Status
 from django.db.models import Q
 from chats.serializers import MessageSerializer
 from asgiref.sync import sync_to_async
+
 
 class ChatChannel(AsyncJsonWebsocketConsumer):
     async def connect(self):
@@ -29,43 +30,39 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, code):
         await self.remove_user()
-        await self.disconnect(code=code)
 
     async def receive(self, text_data='', bytes_data=None, **kwargs):
-        data=json.loads(text_data)
-        receiver_mobile=data["receiver_mobile"]
-        receiver_channel_name=await self.get_channel(receiver_mobile)
+        data = json.loads(text_data)
+        receiver_mobile = data["receiver_mobile"]
+        receiver_channel_name = await self.get_channel(receiver_mobile)
 
-        if(receiver_channel_name):
+        if (receiver_channel_name):
             await self.channel_layer.send(receiver_channel_name,
-                {
-                    "type":"chat.receive",
-                    "payload":text_data
-                }
-            )
+                                          {
+                                              "type": "chat.receive",
+                                              "payload": text_data
+                                          }
+                                          )
         else:
             pass
 
-
-    
-    async def chat_receive(self,text_data):
-        data=text_data['payload']
-        await self.send(data)
+    async def chat_receive(self, text_data):
+        data = text_data['payload']
+        await self.send(json.dumps(data))
 
     @database_sync_to_async
-    def get_channel(self,mobile):
-        channels=WSClient.objects.filter(user__mobile=int(mobile))
-        if(channels.exists()):
-            channel_name=channels.first().channel_name
+    def get_channel(self, mobile):
+        channels = WSClient.objects.filter(user__mobile=int(mobile))
+        if (channels.exists()):
+            channel_name = channels.first().channel_name
             return channel_name
         else:
             return None
-        
 
     @database_sync_to_async
     def get_user_channel(self, to_user_id):
         to_user = get_model(User, id=int(to_user_id))
-        if(not to_user["exist"]):
+        if (not to_user["exist"]):
             return False, "The User Does Not Exist"
 
         to_user = to_user['data']
@@ -88,7 +85,6 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
         print(WSClient.objects.filter(user=self.user).delete())
 
 
-
 class TestChannel(WebsocketConsumer):
     def connect(self):
         self.accept()
@@ -101,5 +97,3 @@ class TestChannel(WebsocketConsumer):
         message = text_data_json["message"]
 
         self.send(text_data=json.dumps({"message": message}))
-
-    
