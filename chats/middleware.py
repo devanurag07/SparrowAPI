@@ -27,8 +27,8 @@ class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope,receive,send):
         close_old_connections()
         # Query Params
-        qs=parse_qs(scope["query_string"].decode("utf8"))
-        token=qs.get("token","nNONI")
+        headers={key.decode("ascii"):value.decode("ascii") for key,value in scope['headers']}
+        token=headers.get("token","adioda")
 
         try:
             UntypedToken(token)
