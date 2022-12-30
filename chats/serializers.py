@@ -11,7 +11,7 @@ class MessageSerializer(ModelSerializer):
     
     
     def get_status(self,instance):
-        
+
         msg_status=instance.status
         status_text=''
         if(msg_status==0):
@@ -46,23 +46,27 @@ class ConversationSerializer(ModelSerializer):
     
     def get_last_message(self,instance):
         messages=instance.messages.all()
-        last_message=messages.order_by("-created_at").first()
-        msg_status=last_message.status
-        msg_time=str(last_message.created_at.time())
-        status_text=''
-        if(msg_status==0):
-            status_text="sent"
-        elif msg_status==1:
-            msg_status="delivered"
-        elif msg_status==2:
-            status_text="seen"
-            
-        return {
-            "message":last_message.message,
-            "status":status_text,
-            "timestamp":msg_time
-        }
-        
+        if(messages.exists()):
+            last_message=messages.order_by("-created_at").first()
+            msg_status=last_message.status
+            msg_time=str(last_message.created_at.time())
+            status_text=''
+            if(msg_status==0):
+                status_text="sent"
+            elif msg_status==1:
+                msg_status="delivered"
+            elif msg_status==2:
+                status_text="seen"
+                
+            return {
+                "message":last_message.message,
+                "status":status_text,
+                "timestamp":msg_time
+            }
+        else:
+            return {
+                
+            }
  
     class Meta:
         model=Conversation

@@ -17,6 +17,15 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
         await self.clean_user()
         await self.add_user()
         await self.accept()
+        await self.send(json.dumps({
+            'receiver_mobile':
+            '1111111111',
+            'sender': 2,
+            'message': 'server se bhenchod',
+            'created_at': '2022-12-30T12:17:49.475761Z',
+            'status': 'sent',
+            'isStarred': False
+        }))
 
     async def disconnect(self, code):
         await self.remove_user()
