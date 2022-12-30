@@ -25,13 +25,14 @@ SECRET_KEY = 'django-insecure-&f37wo1bp0%uwe)b(=g2u(d%_cv+4$=ma+dhfogb+fl_#ixsw&
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['10.0.2.2', 'localhost']
+ALLOWED_HOSTS = ["127.0.0.1:8000", "127.0.0.1",
+                 "localhost", 'ws://127.0.0.1:8000', 'ws://127.0.0.1', '10.0.2.2']
 
 
 # Application definition
 
 INSTALLED_APPS = [
-     "daphne",
+    "daphne",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -84,6 +85,15 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
 }
 
 

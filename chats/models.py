@@ -59,6 +59,6 @@ class Status(models.Model):
 #WebSockets --Models
 class WSClient(models.Model):
     user=models.ForeignKey(User,on_delete=models.CASCADE)
-    channel_id=models.TextField()
+    channel_name=models.TextField()
     
     

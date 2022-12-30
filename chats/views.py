@@ -12,6 +12,7 @@ from sparrow.utils import required_data
 from .serializers import MessageSerializer, StatusSerializer
 from accounts.models import User
 from rest_framework.decorators import action
+from rest_framework import status
 # Create your views here.
 
 
@@ -106,7 +107,7 @@ class ChatAPI(ModelViewSet):
         return queryset
 
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        return Response("Method Not Allowed", status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def create(self, request, *args, **kwargs):
         data = request.data
@@ -136,10 +137,9 @@ class ChatAPI(ModelViewSet):
                           reciever=reciever, message=message)
         message.save()
 
-        return Response(resp_success("Msg Sent...", {
-            "data": MessageSerializer(message, many=False).data,
-            "created": created
-        }))
+        data = MessageSerializer(message, many=False).data
+        data["created"] = created
+        return Response(resp_success("Msg Sent...", data))
 
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
