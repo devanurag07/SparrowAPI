@@ -52,7 +52,7 @@ class ConversationAPI(ModelViewSet):
 
             def get_conv_name(self, instance):
                 current_user = self.context["request"].user
-                print(current_user)
+
                 if (current_user == instance.user1):
                     return instance.user2.first_name + ' ' + instance.user2.last_name
                 else:
@@ -124,7 +124,7 @@ class ChatAPI(ModelViewSet):
 
         mobile, message = req_data
         conv = Conversation.objects.filter(
-            Q(user1=user, user2=reciever) | Q(user1=user, user2=user))
+            Q(user1=user, user2=reciever) | Q(user1=reciever, user2=user))
         if (conv.exists()):
             created = False
             conv = conv.first()

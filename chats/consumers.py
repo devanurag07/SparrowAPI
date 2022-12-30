@@ -4,41 +4,48 @@ from sparrow.utils import get_model
 from accounts.models import User
 from .models import WSClient
 from channels.db import database_sync_to_async
+from .models import Conversation, Message, Status
+from django.db.models import Q
+from chats.serializers import MessageSerializer
 
 
 class ChatChannel(AsyncJsonWebsocketConsumer):
     async def connect(self):
 
         self.user = self.scope["user"]
+
         # Adding User to Channel
         await self.add_user()
         await self.accept()
-
+        print("Acceppted")
         self.close()
 
     async def disconnect(self, code):
         await self.remove_user()
         await self.disconnect(code=code)
 
-    def receive(self, text_data=None, bytes_data=None, **kwargs):
-        data=json.loads(text_data)
-        to_user_mobile=data["receiver_mobile"]
-        to_user_msg=data["message"]        
+    async def receive(self, text_data=None, bytes_data=None, **kwargs):
+        # print(f'msg: {text_data}')
+        # await self.send("Hello From Server")
+
+        data = json.loads(text_data)
+        to_user_mobile = data["receiver_mobile"]
         to_user = get_model(User, mobile=int(to_user_mobile))
-        if(not to_user["exist"]):
+        if (not to_user["exist"]):
             return False, "The User Does Not Exist"
-        
-        to_user=to_user["data"]
-        channels=WSClient.objects.filter(user=to_user)
-        if(channels.exists()):
-            to_user_channel=channels.first().channel_id
-            self.channel_layer.send(to_user_channel,
-                                    {"msg":to_user_msg})
+
+        to_user = to_user["data"]
+        channels = WSClient.objects.filter(user=to_user)
+        if (channels.exists()):
+            reciever_channel_name = channels.first().channel_id
+            self.channel_layer.send(reciever_channel_name, data)
+        else:
+            pass
 
     @database_sync_to_async
     def get_user_channel(self, to_user_id):
         to_user = get_model(User, id=int(to_user_id))
-        if(not to_user["exist"]):
+        if (not to_user["exist"]):
             return False, "The User Does Not Exist"
 
         to_user = to_user['data']
