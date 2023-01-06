@@ -8,9 +8,11 @@ from .models import Message, Status
 from django.db.models import Q
 from chats.serializers import MessageSerializer
 from asgiref.sync import sync_to_async
+from .websocket_constants import SDP_RECEIVE, CHAT_RECEIVE
 
 
 class ChatChannel(AsyncJsonWebsocketConsumer):
+
     async def connect(self):
 
         self.user = self.scope["user"]
@@ -18,36 +20,41 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
         await self.clean_user()
         await self.add_user()
         await self.accept()
-        await self.send(json.dumps({
-            'receiver_mobile':
-            '1111111111',
-            'sender': 2,
-            'message': 'server se bhenchod',
-            'created_at': '2022-12-30T12:17:49.475761Z',
-            'status': 'sent',
-            'isStarred': False
-        }))
 
     async def disconnect(self, code):
-        await self.remove_user()
+        print("Disconnecting")
+        await self.clean_user()
 
     async def receive(self, text_data='', bytes_data=None, **kwargs):
         data = json.loads(text_data)
         receiver_mobile = data["receiver_mobile"]
+        event_type = data["event_type"]
         receiver_channel_name = await self.get_channel(receiver_mobile)
 
         if (receiver_channel_name):
-            await self.channel_layer.send(receiver_channel_name,
-                                          {
-                                              "type": "chat.receive",
-                                              "payload": text_data
-                                          }
-                                          )
+            print(receiver_channel_name)
+            await self.channel_layer.send(receiver_channel_name, {
+                "type": event_type,
+                "payload": text_data
+            })
+
+            if (event_type == SDP_RECEIVE):
+                await self.send(json.dumps({"status": "online"}))
         else:
-            pass
+            print("Hey")
+            if (event_type == SDP_RECEIVE):
+                await self.send(json.dumps({"status": "offline"}))
 
     async def chat_receive(self, text_data):
         data = text_data['payload']
+        data = json.loads(data)
+        data["event_type"] = CHAT_RECEIVE
+        await self.send(json.dumps(data))
+
+    async def sdp_receive(self, text_data):
+        data = text_data["payload"]
+        data = json.loads(data)
+        data["event_type"] = SDP_RECEIVE
         await self.send(json.dumps(data))
 
     @database_sync_to_async
@@ -72,28 +79,9 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def add_user(self):
         self.clean_user()
-        WSClient.objects.create(
-            user=self.user, channel_name=self.channel_name)
-
-    @database_sync_to_async
-    def remove_user(self):
-        self.clean_user()
+        WSClient.objects.create(user=self.user, channel_name=self.channel_name)
 
     @database_sync_to_async
     def clean_user(self):
-        print("cleaned")
-        print(WSClient.objects.filter(user=self.user).delete())
-
-
-class TestChannel(WebsocketConsumer):
-    def connect(self):
-        self.accept()
-
-    def disconnect(self, close_code):
-        pass
-
-    def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        message = text_data_json["message"]
-
-        self.send(text_data=json.dumps({"message": message}))
+        print("Cleaned")
+        WSClient.objects.filter(user=self.user).delete()
