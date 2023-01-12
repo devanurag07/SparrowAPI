@@ -5,8 +5,6 @@ from jwt import decode as jwt_decode
 from channels.db import database_sync_to_async
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.tokens import UntypedToken
-from rest_framework_simplejwt.authentication import JWTTokenUserAuthentication
-from urllib.parse import parse_qs
 from django.conf import settings
 from accounts.models import User
 
@@ -17,25 +15,26 @@ def get_user(validated_token):
     try:
         user = User.objects.get(id=validated_token["user_id"])
         return user
-   
+
     except User.DoesNotExist:
         return AnonymousUser()
 
 
 class JwtAuthMiddleware(BaseMiddleware):
 
-    async def __call__(self, scope,receive,send):
+    async def __call__(self, scope, receive, send):
         close_old_connections()
         # Query Params
-        headers={key.decode("ascii"):value.decode("ascii") for key,value in scope['headers']}
-        token=headers.get("token","adioda")
+        headers = {key.decode("ascii"): value.decode("ascii")
+                   for key, value in scope['headers']}
+        token = headers.get("token", "adioda")
 
         try:
             UntypedToken(token)
         except Exception as e:
             raise InvalidToken("Invalid Token")
-        
-        decoded=jwt_decode(token,settings.SECRET_KEY,algorithms=["HS256"])
+
+        decoded = jwt_decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         scope["user"] = await get_user(validated_token=decoded)
 
-        return await super().__call__(scope,receive,send)
+        return await super().__call__(scope, receive, send)
