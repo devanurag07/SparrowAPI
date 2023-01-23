@@ -4,23 +4,22 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from accounts.models import User
 from rest_framework.serializers import ModelSerializer
+import re
 
 
 def required_data(data_dict, data_list):
-    errors = {
-
-    }
+    errors = {}
 
     data = []
 
     for d in data_list:
         value = data_dict.get(d, None)
-        if(not value):
+        if (not value):
             errors[d] = "This Field Is Required"
 
         data.append(value)
 
-    if(len(list(errors.values())) == 0):
+    if (len(list(errors.values())) == 0):
         return True, data
 
     return False, errors
@@ -54,17 +53,20 @@ def user_created(user):
 def get_model(model, **args):
     obj_list = model.objects.filter(**args)
 
-    if(obj_list.exists()):
-        return {
-            "exist": True,
-            "data": obj_list.first()
-        }
+    if (obj_list.exists()):
+        return {"exist": True, "data": obj_list.first()}
 
-    return {
-        "exist": False,
-        "data": []
-    }
+    return {"exist": False, "data": []}
 
 
 def user_exists(mobile):
     return User.objects.filter(mobile=mobile).exists()
+
+
+def phone_format(phone_number):
+
+    clean_phone_number = re.sub('[^0-9]+', '', phone_number)
+    formatted_phone_number = re.sub(r'\D', '', clean_phone_number)
+    if (formatted_phone_number.startswith("+91")):
+        formatted_phone_number = formatted_phone_number[3:]
+    return formatted_phone_number

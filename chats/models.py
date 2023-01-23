@@ -60,5 +60,12 @@ class Status(models.Model):
 class WSClient(models.Model):
     user=models.ForeignKey(User,on_delete=models.CASCADE)
     channel_name=models.TextField()
+    created_at=models.DateTimeField(auto_now_add=True)
+    
+class SignallingWSClient(models.Model):
+    user=models.ForeignKey(User,on_delete=models.CASCADE)
+    channel_name=models.TextField()
+    created_at=models.DateTimeField(auto_now_add=True)
+
     
     

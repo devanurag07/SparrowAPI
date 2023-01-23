@@ -13,6 +13,7 @@ from .serializers import MessageSerializer, StatusSerializer
 from accounts.models import User
 from rest_framework.decorators import action
 from rest_framework import status
+from sparrow.utils import phone_format
 # Create your views here.
 
 
@@ -31,11 +32,14 @@ class ConversationAPI(ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         conversations = self.get_queryset()
-        data = ConversationSerializer(conversations, many=True, context={
-            "request": request}).data
-        return Response(resp_success("Conversations Fetched Successfully", {
-            "data": data
-        }))
+        
+        data = ConversationSerializer(conversations,
+                                      many=True,
+                                      context={
+                                          "request": request
+                                      }).data
+        return Response(
+            resp_success("Conversations Fetched Successfully", {"data": data}))
 
     def retrieve(self, request, pk=None, *args, **kwargs):
         if (not pk):
@@ -48,16 +52,7 @@ class ConversationAPI(ModelViewSet):
 
         class ConvSerializer(serializers.ModelSerializer):
             messages = MessageSerializer(many=True)
-            conv_name = serializers.SerializerMethodField(read_only=True)
             receiver_info = serializers.SerializerMethodField(read_only=True)
-
-            def get_conv_name(self, instance):
-                current_user = self.context["request"].user
-
-                if (current_user == instance.user1):
-                    return instance.user2.first_name + ' ' + instance.user2.last_name
-                else:
-                    return instance.user1.first_name + ' '+instance.user1.last_name
 
             def get_receiver_info(self, instance):
                 receiver_user = None
@@ -68,9 +63,12 @@ class ConversationAPI(ModelViewSet):
                     receiver_user = instance.user1
 
                 data = {
-                    "receiver_name": receiver_user.first_name+" "+receiver_user.last_name,
-                    "bio": receiver_user.bio,
-                    "mobile": receiver_user.mobile
+                    "receiver_name":
+                    receiver_user.first_name + " " + receiver_user.last_name,
+                    "bio":
+                    receiver_user.bio,
+                    "mobile":
+                    receiver_user.mobile
                 }
                 return data
 
@@ -78,9 +76,13 @@ class ConversationAPI(ModelViewSet):
                 model = Conversation
                 fields = "__all__"
 
-        conv_data = ConvSerializer(conv, many=False, context={
-            "request": request}).data
-        return Response(resp_success("Conversation Fetched Successfully.", conv_data))
+        conv_data = ConvSerializer(conv,
+                                   many=False,
+                                   context={
+                                       "request": request
+                                   }).data
+        return Response(
+            resp_success("Conversation Fetched Successfully.", conv_data))
 
     def update(self, request, *args, **kwargs):
         return Response(resp_fail("Methdod Not Allowed"))
@@ -97,6 +99,130 @@ class ConversationAPI(ModelViewSet):
 
         return Response(resp_fail("Conversation ID Required."))
 
+    @action(methods=["POST"], detail=False, url_path="get_available_users")
+    def get_available_users(self, request):
+        data = request.data
+        success, req_data = required_data(data, ["numbers_list"])
+        if (not success):
+   
+            errors = req_data
+            return Response(resp_fail("Invalid Data Provided", data=errors))
+
+        numbers_list, = req_data
+        if (type(numbers_list) == list):
+            avail_users = []
+            for number in numbers_list:
+                number_unchanged = number
+                formatted = phone_format(number)
+                number = int("".join(formatted.split("-")))
+
+                users = User.objects.filter(mobile=int(number))
+
+                available = users.exists()
+                if (available):
+                    user = users.first()
+                    avail_users.append({
+                        "mobile": number_unchanged,
+                        "exists": True,
+                        "bio": user.bio,
+                        "profile_pic": str(user.profile_pic)
+                    })
+
+                else:
+                        avail_users.append({"mobile": number, "exists": False})
+            
+            return Response(
+                resp_success("Fetched Available Users", avail_users))
+
+        elif (str(numbers_list).isnumeric()):
+            number = numbers_list
+            formatted = phone_format(number)
+            number = int("".join(formatted.split("-")))
+
+            users = User.objects.filter(mobile=int(number))
+            available = users.exists()
+
+            if (available):
+                user = users.first()
+                return Response(
+                    resp_success("Success",
+                                data=[{
+                                    "exists": True,
+                                    "mobile": numbers_list,
+                                    "bio": user.bio,
+                                    "profile_pic": str(user.profile_pic)
+                                }]))
+
+            else:
+                return Response(
+                    resp_success(
+                        "Success",
+                        data=[{
+                            "exists": False,
+                            "mobile": numbers_list,
+                            #  "profile_pic": user.profile_pic
+                        }]))
+       
+
+        else:
+            return Response(resp_fail("Invalid Mobile Numbers...."))
+
+    @action(methods=["POST"], detail=False, url_path="get_conv")
+    def get_conv(self, request):
+
+        class ConvSerializer(serializers.ModelSerializer):
+            messages = MessageSerializer(many=True)
+            receiver_info = serializers.SerializerMethodField(read_only=True)
+
+            def get_receiver_info(self, instance):
+                receiver_user = None
+                current_user = self.context["request"].user
+                if (current_user == instance.user1):
+                    receiver_user = instance.user2
+                else:
+                    receiver_user = instance.user1
+
+                data = {
+                    "receiver_name":
+                    receiver_user.first_name + " " + receiver_user.last_name,
+                    "bio":
+                    receiver_user.bio,
+                    "mobile":
+                    receiver_user.mobile
+                }
+                return data
+
+            class Meta:
+                model = Conversation
+                fields = "__all__"
+
+        data = request.data
+        success, req_data = required_data(data, ["mobile"])
+        if (not success):
+            errors = req_data
+            return Response(resp_fail("Invalid Data Provided", data=errors))
+
+        mobile, = req_data
+        convs = Conversation.objects.filter(
+            Q(user1__mobile=int(mobile)) | Q(user2__mobile=int(mobile)))
+
+        if (convs.exists()):
+            conv = convs.first()
+            data = ConvSerializer(conv,
+                                  many=False,
+                                  context={
+                                      "request": request
+                                  }).data
+
+            return Response(
+                resp_success("Conv Fetched...",
+                             data={
+                                 "exists": True,
+                                 "conv": data
+                             }))
+        return Response(
+            resp_success("Response Doesn't Exists...", data={"exists": False}))
+
 
 class ChatAPI(ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -107,7 +233,8 @@ class ChatAPI(ModelViewSet):
         return queryset
 
     def list(self, request, *args, **kwargs):
-        return Response("Method Not Allowed", status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return Response("Method Not Allowed",
+                        status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def create(self, request, *args, **kwargs):
         data = request.data
@@ -133,8 +260,10 @@ class ChatAPI(ModelViewSet):
             created = True
             conv = Conversation.objects.create(user1=user, user2=reciever)
 
-        message = Message(conversation=conv, sender=user,
-                          reciever=reciever, message=message)
+        message = Message(conversation=conv,
+                          sender=user,
+                          reciever=reciever,
+                          message=message)
         message.save()
 
         data = MessageSerializer(message, many=False).data
@@ -160,10 +289,10 @@ class StatusAPI(ModelViewSet):
         status_form = StatusSerializer(data=request.data)
         if (status_form.is_valid()):
             status = status_form.save()
-            return Response(resp_success("Status Uploaded Successfully", {
-                "data": status_form.data
-            }))
+            return Response(
+                resp_success("Status Uploaded Successfully",
+                             {"data": status_form.data}))
         else:
-            return Response(resp_fail("Failed To Upload Status", {
-                "errors": status_form.errors
-            }))
+            return Response(
+                resp_fail("Failed To Upload Status",
+                          {"errors": status_form.errors}))

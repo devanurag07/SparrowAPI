@@ -9,14 +9,14 @@ from simple_history.models import HistoricalRecords
 class User(AbstractUser):
     username = None
     email = models.EmailField(blank=True)
-    mobile = models.BigIntegerField(
-        blank=False, unique=True)
-    profile_pic=models.ImageField(upload_to="media/profilepics",null=True)
+    mobile = models.BigIntegerField(blank=False, unique=True)
+    profile_pic = models.ImageField(upload_to="media/profilepics",
+                                    default="media/default.jpg")
     USERNAME_FIELD = 'mobile'
-    
+
     REQUIRED_FIELDS = ["first_name", "last_name"]
-    
-    bio=models.TextField()
+
+    bio = models.TextField()
     objects = CustomUserManager()
 
     class GenderChoices(models.TextChoices):
@@ -24,8 +24,9 @@ class User(AbstractUser):
         FEMALE = "female", "Female"
         OTHER = "other", "Other"
 
-    gender = models.CharField(
-        max_length=255, choices=GenderChoices.choices, default=GenderChoices.MALE)
+    gender = models.CharField(max_length=255,
+                              choices=GenderChoices.choices,
+                              default=GenderChoices.MALE)
 
     history = HistoricalRecords()
 
@@ -41,13 +42,12 @@ class User(AbstractUser):
 
 #OTP Temp Data
 class OtpTempData(models.Model):
-    first_name=models.CharField(max_length=255)
-    last_name=models.CharField(max_length=255)
-    mobile=models.IntegerField()
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    mobile = models.IntegerField()
     attempts = models.IntegerField(default=0)
-    otp=models.IntegerField()
-    created_at = models.DateTimeField(
-        auto_now_add=True)
+    otp = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     history = HistoricalRecords()
 
@@ -57,7 +57,6 @@ class LoginOtp(models.Model):
     otp = models.IntegerField()
     mobile = models.BigIntegerField()
     attempts = models.IntegerField(default=0)
-    created_at = models.DateTimeField(
-        auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     history = HistoricalRecords()

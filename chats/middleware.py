@@ -20,6 +20,19 @@ def get_user(validated_token):
         return AnonymousUser()
 
 
+
+
+def get_user_sync(validated_token):
+
+    try:
+        user = User.objects.get(id=validated_token["user_id"])
+        return user
+
+    except User.DoesNotExist:
+        return AnonymousUser()
+
+
+
 class JwtAuthMiddleware(BaseMiddleware):
 
     async def __call__(self, scope, receive, send):
