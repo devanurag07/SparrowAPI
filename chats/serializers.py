@@ -3,6 +3,7 @@ from .models import Conversation, Message, Status
 from accounts.serializers import UserSerializer
 from rest_framework import serializers
 from rest_framework.fields import CurrentUserDefault
+from .utils import get_conv_messages
 
 
 class MessageSerializer(ModelSerializer):
@@ -53,7 +54,9 @@ class ConversationSerializer(ModelSerializer):
         return ''
 
     def get_last_message(self, instance):
-        messages = instance.messages.all()
+        current_user = self.context["request"].user
+        messages = get_conv_messages(instance, current_user)
+
         if (messages.exists()):
             last_message = messages.order_by("-created_at").first()
             msg_status = last_message.status

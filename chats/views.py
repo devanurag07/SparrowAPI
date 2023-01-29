@@ -1,3 +1,4 @@
+import datetime
 from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -14,6 +15,8 @@ from accounts.models import User
 from rest_framework.decorators import action
 from rest_framework import status
 from sparrow.utils import phone_format
+from .models import DeletedConversation
+from .utils import get_conv_messages
 # Create your views here.
 
 
@@ -32,7 +35,7 @@ class ConversationAPI(ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         conversations = self.get_queryset()
-        
+
         data = ConversationSerializer(conversations,
                                       many=True,
                                       context={
@@ -50,8 +53,11 @@ class ConversationAPI(ModelViewSet):
             return Response(resp_fail("Conversation Does Not Exist..."))
         conv = conv.first()
 
+        user = self.request.user
+
         class ConvSerializer(serializers.ModelSerializer):
-            messages = MessageSerializer(many=True)
+            messages = serializers.SerializerMethodField(
+                read_only=True)
             receiver_info = serializers.SerializerMethodField(read_only=True)
 
             def get_receiver_info(self, instance):
@@ -71,6 +77,10 @@ class ConversationAPI(ModelViewSet):
                     receiver_user.mobile
                 }
                 return data
+
+            def get_messages(self, instance):
+                messages = get_conv_messages(instance, user)
+                return MessageSerializer(messages, many=True).data
 
             class Meta:
                 model = Conversation
@@ -92,7 +102,17 @@ class ConversationAPI(ModelViewSet):
             queryset = self.get_queryset()
             convs = queryset.filter(pk=int(pk))
             if (convs.exists()):
-                convs.delete()
+                # convs.delete()
+                conv = convs.first()
+                deleted_conv, created = DeletedConversation.objects.get_or_create(
+                    user=self.request.user, conv=conv)
+
+                if (created):
+                    pass
+                else:
+                    deleted_conv.deleted_at = datetime.datetime.now()
+                    deleted_conv.save()
+
                 return Response(resp_success("Conversation Deleted"))
 
             return Response(resp_fail("Conversation Not Found..."))
@@ -104,7 +124,7 @@ class ConversationAPI(ModelViewSet):
         data = request.data
         success, req_data = required_data(data, ["numbers_list"])
         if (not success):
-   
+
             errors = req_data
             return Response(resp_fail("Invalid Data Provided", data=errors))
 
@@ -114,6 +134,9 @@ class ConversationAPI(ModelViewSet):
             for number in numbers_list:
                 number_unchanged = number
                 formatted = phone_format(number)
+                if (not (len(formatted) == 10)):
+                    continue
+
                 number = int("".join(formatted.split("-")))
 
                 users = User.objects.filter(mobile=int(number))
@@ -129,14 +152,19 @@ class ConversationAPI(ModelViewSet):
                     })
 
                 else:
-                        avail_users.append({"mobile": number, "exists": False})
-            
+                    avail_users.append({"mobile": number, "exists": False})
+
             return Response(
                 resp_success("Fetched Available Users", avail_users))
 
         elif (str(numbers_list).isnumeric()):
             number = numbers_list
             formatted = phone_format(number)
+            if (not (len(formatted) == 10)):
+                return Response(
+                    resp_success("Success",
+                                 data=[[]]))
+
             number = int("".join(formatted.split("-")))
 
             users = User.objects.filter(mobile=int(number))
@@ -146,12 +174,12 @@ class ConversationAPI(ModelViewSet):
                 user = users.first()
                 return Response(
                     resp_success("Success",
-                                data=[{
-                                    "exists": True,
-                                    "mobile": numbers_list,
-                                    "bio": user.bio,
-                                    "profile_pic": str(user.profile_pic)
-                                }]))
+                                 data=[{
+                                     "exists": True,
+                                     "mobile": numbers_list,
+                                     "bio": user.bio,
+                                     "profile_pic": str(user.profile_pic)
+                                 }]))
 
             else:
                 return Response(
@@ -162,7 +190,6 @@ class ConversationAPI(ModelViewSet):
                             "mobile": numbers_list,
                             #  "profile_pic": user.profile_pic
                         }]))
-       
 
         else:
             return Response(resp_fail("Invalid Mobile Numbers...."))
