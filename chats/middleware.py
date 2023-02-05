@@ -20,8 +20,6 @@ def get_user(validated_token):
         return AnonymousUser()
 
 
-
-
 def get_user_sync(validated_token):
 
     try:
@@ -29,8 +27,7 @@ def get_user_sync(validated_token):
         return user
 
     except User.DoesNotExist:
-        return AnonymousUser()
-
+        raise AnonymousUser()
 
 
 class JwtAuthMiddleware(BaseMiddleware):

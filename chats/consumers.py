@@ -2,14 +2,14 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer, WebsocketCons
 import json
 from sparrow.utils import get_model
 from accounts.models import User
-from .models import WSClient,SignallingWSClient
+from .models import WSClient, SignallingWSClient
 from channels.db import database_sync_to_async
 from .models import Message, Status
 from django.db.models import Q
 from chats.serializers import MessageSerializer
 from asgiref.sync import sync_to_async
 from .websocket_constants import SDP_RECEIVE, CHAT_RECEIVE
-from .middleware import get_user,get_user_sync
+from .middleware import get_user, get_user_sync
 
 
 from channels.middleware import BaseMiddleware
@@ -20,32 +20,29 @@ from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.tokens import UntypedToken
 from django.conf import settings
 from asgiref.sync import async_to_sync
+from .ws_permissions import wsIsAuthenticated
+
+
 class ChatChannel(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
-
-        scope=self.scope
-        headers = {key.decode("ascii"): value.decode("ascii")
-                   for key, value in scope['headers']}
-        token = headers.get("token", "adioda")
-
-        try:
-            UntypedToken(token)
-        except Exception as e:
-            raise InvalidToken("Invalid Token")
-
-        decoded = jwt_decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        scope["user"] = await get_user(validated_token=decoded)
-
-        self.user = scope["user"]
         # Adding User to Channel
+        self.user = self.scope["user"]
+        isAuth = wsIsAuthenticated(self)
+        if (not isAuth):
+            await self.close()
+            return
+
         await self.clean_user()
         await self.add_user()
         await self.accept()
 
     async def disconnect(self, code):
-        print("Disconnecting")
-        await self.clean_user()
+        isAuth = wsIsAuthenticated(self)
+        if (not isAuth):
+            pass
+        else:
+            await self.clean_user()
 
     async def receive(self, text_data='', bytes_data=None, **kwargs):
         data = json.loads(text_data)
@@ -54,7 +51,6 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
         receiver_channel_name = await self.get_channel(receiver_mobile)
 
         if (receiver_channel_name):
-            print(receiver_channel_name)
             await self.channel_layer.send(receiver_channel_name, {
                 "type": event_type,
                 "payload": text_data
@@ -109,49 +105,37 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
         WSClient.objects.filter(user=self.user).delete()
 
 
-
-
 # Signalling Constants
 
-OFFER="rtc.offer"
-ANSWER="rtc.answer"
-CANDIDATE="rtc.candidate"
+OFFER = "rtc.offer"
+ANSWER = "rtc.answer"
+CANDIDATE = "rtc.candidate"
+
 
 class Signalling(WebsocketConsumer):
     def connect(self):
-    
-        scope=self.scope
-        headers = {key.decode("ascii"): value.decode("ascii")
-                   for key, value in scope['headers']}
-        token = headers.get("token", "adioda")
 
-        try:
-            UntypedToken(token)
-        except Exception as e:
-            raise InvalidToken("Invalid Token")
-
-        decoded = jwt_decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        scope["user"] = get_user_sync(validated_token=decoded)
-
-        self.user = scope["user"]
+        self.user = self.scope["user"]
+        isAuth = wsIsAuthenticated(self)
+        if (not isAuth):
+            self.close()
+            return
 
         self.clean_user()
         self.add_user()
         self.accept()
 
-        self.send(json.dumps({
-            "type":"info",
-            "msg":"Signalling COnnected"
-
-        }))        
     def disconnect(self, code):
         print("Disconnecting")
-        self.clean_user()
+        isAuth = wsIsAuthenticated(self)
+        if (not isAuth):
+            pass
+        else:
+            self.clean_user()
 
+    async def authenticate(self, data):
 
-    async def authenticate(self,data):
-
-        scope=self.scope
+        scope = self.scope
         token = data['token']
 
         try:
@@ -161,29 +145,26 @@ class Signalling(WebsocketConsumer):
 
         decoded = jwt_decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         user = get_user(validated_token=decoded)
-        self.user=user
+        self.user = user
 
         print("HEy there")
         self.clean_user()
         self.add_user()
         print("Authenticated")
 
-
-
     def receive(self, text_data='', bytes_data=None, **kwargs):
         import pdb
         data = json.loads(text_data)
         event_type = data["type"]
         print("Sending ")
-        print("Event Type :"+str(event_type))   
-        
+        print("Event Type :"+str(event_type))
 
-        if(event_type=="authenticate"):
+        if (event_type == "authenticate"):
             # await self.send(json.dumps(data))
-            self.channel_layer.send(self.channel_name,data)
+            self.channel_layer.send(self.channel_name, data)
             return
 
-        data['mobile']=self.user.mobile;
+        data['mobile'] = self.user.mobile
         receiver_mobile = data["receiver"]
         receiver_channel_name = self.get_channel(receiver_mobile)
 
@@ -191,21 +172,18 @@ class Signalling(WebsocketConsumer):
             print(f"Sending To {receiver_mobile}")
             print(f"CHANNEL_NAME : {receiver_channel_name}")
 
-            async_to_sync(self.channel_layer.send)(receiver_channel_name,data)
+            async_to_sync(self.channel_layer.send)(receiver_channel_name, data)
 
             if (event_type == OFFER):
-                self.send(json.dumps({"status": "online","type":"status"}))
+                self.send(json.dumps({"status": "online", "type": "status"}))
             return
         else:
             if (event_type == OFFER):
-                self.send(json.dumps({"status": "offline","type":"status"}))
-
-
-
+                self.send(json.dumps({"status": "offline", "type": "status"}))
 
     def rtc_offer(self, text_data):
         print("Offer Getting")
-        mobile=text_data['receiver']
+        mobile = text_data['receiver']
         print(f"Calling - {mobile}")
         self.send(json.dumps(text_data))
 
@@ -220,31 +198,27 @@ class Signalling(WebsocketConsumer):
 
     def rtc_reject(self, text_data):
         self.send(json.dumps(text_data))
-    
+
     def get_channel(self, mobile):
-        try:    
-            channels = SignallingWSClient.objects.filter(user__mobile=int(mobile))
+        try:
+            channels = SignallingWSClient.objects.filter(
+                user__mobile=int(mobile))
             print(f"{channels.count()} Channels with mobile no {mobile}")
 
         except Exception as e:
-            import pdb
-            pdb.set_trace()
-            
+            pass
+
         if (channels.exists()):
             channel_name = channels.first().channel_name
             return channel_name
         else:
             return None
 
-    
     def add_user(self):
         print("Createad Channel "+str(self.channel_name))
-        SignallingWSClient.objects.create(user=self.user, channel_name=self.channel_name)
-        print("User Added with mobile -- ",str(self.user.mobile))
-
-
-        
+        SignallingWSClient.objects.create(
+            user=self.user, channel_name=self.channel_name)
+        print("User Added with mobile -- ", str(self.user.mobile))
 
     def clean_user(self):
-        print(SignallingWSClient.objects.filter(user=self.user).delete())
-
+        SignallingWSClient.objects.filter(user=self.user).delete()
