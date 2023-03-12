@@ -19,6 +19,8 @@ from .models import DeletedConversation
 from .utils import get_conv_messages
 from django.core import serializers as serializers_core
 # Create your views here.
+from .serializers import UserSerializer
+from itertools import chain
 
 
 class ConversationAPI(ModelViewSet):
@@ -80,6 +82,7 @@ class ConversationAPI(ModelViewSet):
                 return data
 
             def get_messages(self, instance):
+
                 messages = get_conv_messages(instance, user)
                 return MessageSerializer(messages, many=True).data
 
@@ -266,7 +269,8 @@ class ChatAPI(ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         data = request.data
-        success, req_data = required_data(data, ["mobile", "message"])
+        success, req_data = required_data(
+            data, ["mobile", "message"])
         if (not success):
             return Response(resp_fail("[Mobile , Message] Required.."))
 
@@ -278,7 +282,6 @@ class ChatAPI(ModelViewSet):
         else:
             return Response(resp_fail("Reciever Doesn't Exist"))
 
-        mobile, message = req_data
         conv = Conversation.objects.filter(
             Q(user1=user, user2=reciever) | Q(user1=reciever, user2=user))
         if (conv.exists()):
@@ -291,7 +294,9 @@ class ChatAPI(ModelViewSet):
         message = Message(conversation=conv,
                           sender=user,
                           reciever=reciever,
-                          message=message)
+                          message=message,
+                          replyOf=data['replyof']
+                          )
         message.save()
 
         data = MessageSerializer(message, many=False).data
@@ -312,17 +317,55 @@ class StatusAPI(ModelViewSet):
     def get_queryset(self):
         return Status.objects.filter(user=self.request.user)
 
-    def list(self, request, *args, **kwargs):
-        status = Status.objects.filter(user=self.request.user)
-        data = StatusSerializer(status, many=True).data
+    def retrieve(self, request, *args, **kwargs):
+
+        # current_user = User.objects.filter(id=request.user.id)
+        current_user = UserSerializer(request.user).data
+
+        conversations = list(chain(Conversation.objects.filter(
+            user1=current_user['id']), Conversation.objects.filter(user2=current_user['id'])))
+
+        all_status = Status.objects.all()
+        my_status = Status.objects.filter(user=self.request.user)
+
+        contact_status = []
+        for conversation in conversations:
+            for status in all_status:
+                if (status.user == conversation.user1 or status.user == conversation.user2) & (self.request.user != status.user):
+                    status = StatusSerializer(
+                        status, context={'status_info': status}).data
+                    contact_status.append(status)
+
+        import itertools
+        contact_status = itertools.groupby(
+            contact_status, lambda x: x['user_mobile'])
+
+        grpd_contact_status = []
+        for mobile, status in contact_status:
+            grpd_contact_status.append({mobile: list(status)})
+
+        my_status = StatusSerializer(my_status, many=True,  context={
+            "status_info": None
+        }).data
 
         return Response(
-            resp_success("Status Featched Successfully", {"data": data})
+            resp_success("Status Featched Successfully", {
+                         "data": {'my_status': my_status, 'contact_status': grpd_contact_status}})
         )
+
+    # @action('GET', url_path='view-status')
+    # def view_status(self, request):
+    #     return
+
+    # @action('GET', url_path='status-views')
+    # def get_status_views(self, request):
+
+    #     return
 
     def create(self, request, *args, **kwargs):
         request.data["user"] = request.user.id
-        status_form = StatusSerializer(data=request.data)
+        status_form = StatusSerializer(
+            data=request.data, context={'status_info': None})
         if (status_form.is_valid()):
             status = status_form.save()
             return Response(

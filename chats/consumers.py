@@ -27,8 +27,10 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         # Adding User to Channel
+
         self.user = self.scope["user"]
         isAuth = wsIsAuthenticated(self)
+
         if (not isAuth):
             await self.close()
             return
@@ -39,6 +41,7 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, code):
         isAuth = wsIsAuthenticated(self)
+        print('close' + str(isAuth))
         if (not isAuth):
             pass
         else:

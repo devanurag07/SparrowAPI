@@ -4,6 +4,7 @@ from accounts.serializers import UserSerializer
 from rest_framework import serializers
 from rest_framework.fields import CurrentUserDefault
 from .utils import get_conv_messages
+from accounts.models import User
 
 
 class MessageSerializer(ModelSerializer):
@@ -51,7 +52,13 @@ class ConversationSerializer(ModelSerializer):
             return instance.user1.first_name
 
     def get_avatar(self, instance):
-        return ''
+        current_user = self.context["request"].user
+        print(current_user)
+
+        if (current_user == instance.user1):
+            return '/media/' + instance.user2.profile_pic.name
+        else:
+            return '/media/' + instance.user1.profile_pic.name
 
     def get_last_message(self, instance):
         current_user = self.context["request"].user
@@ -83,6 +90,15 @@ class ConversationSerializer(ModelSerializer):
 
 
 class StatusSerializer(ModelSerializer):
+    # todo: get mobile number for contact name
+
+    user_mobile = serializers.SerializerMethodField(read_only=True)
+
+    def get_user_mobile(self, instance):
+        status_info = self.context['status_info']
+        if (status_info == None):
+            return
+        return status_info.user.mobile
 
     class Meta:
         model = Status

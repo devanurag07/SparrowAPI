@@ -24,6 +24,7 @@ class Message(models.Model):
         User, on_delete=models.CASCADE, related_name="received_messages")
     message = models.TextField()
     isStarred = models.BooleanField(default=False)
+    replyOf = models.TextField(null=True)
 
     STATUS_CHOICES = [
         (0, "SENT"),

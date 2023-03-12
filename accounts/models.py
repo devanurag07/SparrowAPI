@@ -10,8 +10,8 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(blank=True)
     mobile = models.BigIntegerField(blank=False, unique=True)
-    profile_pic = models.ImageField(upload_to="media/profilepics",
-                                    default="media/default.jpg")
+    profile_pic = models.ImageField(upload_to="profilepics",
+                                    default="profilepics/default.jpg")
     USERNAME_FIELD = 'mobile'
 
     REQUIRED_FIELDS = ["first_name", "last_name"]
@@ -40,7 +40,7 @@ class User(AbstractUser):
         return super().save(*args, **kwargs)
 
 
-#OTP Temp Data
+# OTP Temp Data
 class OtpTempData(models.Model):
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)

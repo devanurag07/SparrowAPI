@@ -16,7 +16,7 @@ def delete_otps(user_exist, mobile):
 def send_otp(user_exist, mobile, data):
     delete_otps(user_exist, mobile)
     if (user_exist):
-        #Login
+        # Login
         otp = random.randint(10000, 99999)
         otp_obj = LoginOtp(otp=otp, mobile=mobile)
         otp_obj.save()
@@ -26,7 +26,7 @@ def send_otp(user_exist, mobile, data):
                 "mobile": mobile
             }))
     else:
-        #SignUP
+        # SignUP
         success, req_data = required_data(data, ["first_name", "last_name"])
         if (not success):
             return Response(resp_fail("[first_name,last_name] Required..."))
@@ -68,7 +68,7 @@ def verify_otp(users_list, mobile, otp):
 
             delete_otps(user_exist, mobile)
             token = RefreshToken.for_user(user)
-            user_data = UserSerializer(user, many=False).data
+            user_data = UserSerializer(user, many=False, ).data
 
             return Response(
                 resp_success(
