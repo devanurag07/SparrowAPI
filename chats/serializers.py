@@ -1,15 +1,14 @@
-from rest_framework.serializers import ModelSerializer
-from .models import Conversation, Message, Status
-from accounts.serializers import UserSerializer
 from rest_framework import serializers
-from rest_framework.fields import CurrentUserDefault
+from rest_framework.serializers import ModelSerializer
+
+from .models import Conversation, Document, Image, Message
 from .utils import get_conv_messages
-from accounts.models import User
 
 
 class MessageSerializer(ModelSerializer):
 
     status = serializers.SerializerMethodField(read_only=True)
+    document = serializers.SerializerMethodField(read_only=True)
 
     def get_status(self, instance):
 
@@ -23,6 +22,19 @@ class MessageSerializer(ModelSerializer):
             status_text = "seen"
 
         return status_text
+
+    def get_document(self, instance):
+        image = Image.objects.filter(message=instance.id)
+        doc = Document.objects.filter(message=instance.id)
+
+        if image.exists():
+            image = ImageSerializer(image[0]).data
+            return image
+        elif doc.exists():
+            doc = DocumentSerializer(doc[0]).data
+            return doc
+        else:
+            return
 
     class Meta:
         model = Message
@@ -68,6 +80,7 @@ class ConversationSerializer(ModelSerializer):
             last_message = messages.order_by("-created_at").first()
             msg_status = last_message.status
             msg_time = str(last_message.created_at.time())
+
             status_text = ''
             if (msg_status == 0):
                 status_text = "sent"
@@ -79,7 +92,8 @@ class ConversationSerializer(ModelSerializer):
             return {
                 "message": last_message.message,
                 "status": status_text,
-                "timestamp": msg_time
+                "timestamp": msg_time,
+                "sender": last_message.sender.id
             }
         else:
             return {}
@@ -89,17 +103,15 @@ class ConversationSerializer(ModelSerializer):
         fields = "__all__"
 
 
-class StatusSerializer(ModelSerializer):
-    # todo: get mobile number for contact name
-
-    user_mobile = serializers.SerializerMethodField(read_only=True)
-
-    def get_user_mobile(self, instance):
-        status_info = self.context['status_info']
-        if (status_info == None):
-            return
-        return status_info.user.mobile
+class ImageSerializer(ModelSerializer):
 
     class Meta:
-        model = Status
+        model = Image
+        fields = "__all__"
+
+
+class DocumentSerializer(ModelSerializer):
+
+    class Meta:
+        model = Document
         fields = "__all__"

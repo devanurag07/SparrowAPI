@@ -1,26 +1,21 @@
 import datetime
-from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from .serializers import ConversationSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
-from .models import Conversation, Message, Status
+from .models import Conversation, Message, GroupChat
 from sparrow.utils import resp_fail, resp_success
 from django.db.models import Q
-from django.shortcuts import get_object_or_404
 from sparrow.utils import required_data
-from .serializers import MessageSerializer, StatusSerializer
+from .serializers import MessageSerializer, ImageSerializer, DocumentSerializer
 from accounts.models import User
 from rest_framework.decorators import action
 from rest_framework import status
 from sparrow.utils import phone_format
 from .models import DeletedConversation
 from .utils import get_conv_messages
-from django.core import serializers as serializers_core
 # Create your views here.
-from .serializers import UserSerializer
-from itertools import chain
 
 
 class ConversationAPI(ModelViewSet):
@@ -62,6 +57,7 @@ class ConversationAPI(ModelViewSet):
             messages = serializers.SerializerMethodField(
                 read_only=True)
             receiver_info = serializers.SerializerMethodField(read_only=True)
+            avatar = serializers.SerializerMethodField(read_only=True)
 
             def get_receiver_info(self, instance):
                 receiver_user = None
@@ -80,6 +76,15 @@ class ConversationAPI(ModelViewSet):
                     receiver_user.mobile
                 }
                 return data
+
+            def get_avatar(self, instance):
+                current_user = request.user
+                print(current_user)
+
+                if (current_user == instance.user1):
+                    return '/media/' + instance.user2.profile_pic.name
+                else:
+                    return '/media/' + instance.user1.profile_pic.name
 
             def get_messages(self, instance):
 
@@ -152,7 +157,7 @@ class ConversationAPI(ModelViewSet):
                         "mobile": number_unchanged,
                         "exists": True,
                         "bio": user.bio,
-                        "profile_pic": str(user.profile_pic)
+                        "profile_pic": '/media/'+str(user.profile_pic)
                     })
 
                 else:
@@ -182,7 +187,7 @@ class ConversationAPI(ModelViewSet):
                                      "exists": True,
                                      "mobile": numbers_list,
                                      "bio": user.bio,
-                                     "profile_pic": str(user.profile_pic)
+                                     "profile_pic": '/media/' + str(user.profile_pic)
                                  }]))
 
             else:
@@ -204,6 +209,7 @@ class ConversationAPI(ModelViewSet):
         class ConvSerializer(serializers.ModelSerializer):
             messages = MessageSerializer(many=True)
             receiver_info = serializers.SerializerMethodField(read_only=True)
+            avatar = serializers.SerializerMethodField(read_only=True)
 
             def get_receiver_info(self, instance):
                 receiver_user = None
@@ -222,6 +228,15 @@ class ConversationAPI(ModelViewSet):
                     receiver_user.mobile
                 }
                 return data
+
+            def get_avatar(self, instance):
+                current_user = request.user
+                print(current_user)
+
+                if (current_user == instance.user1):
+                    return '/media/' + instance.user2.profile_pic.name
+                else:
+                    return '/media/' + instance.user1.profile_pic.name
 
             class Meta:
                 model = Conversation
@@ -274,104 +289,148 @@ class ChatAPI(ModelViewSet):
         if (not success):
             return Response(resp_fail("[Mobile , Message] Required.."))
 
-        mobile, message = req_data
-        user = request.user
-        receivers = User.objects.filter(mobile=mobile)
-        if (receivers.exists()):
-            reciever = receivers.first()
+        mobiles, message = req_data
+        if len(mobiles) == 1:
+            user = request.user
+            receivers = User.objects.filter(mobile=mobiles[0])
+            if (receivers.exists()):
+                reciever = receivers.first()
+            else:
+                return Response(resp_fail("Reciever Doesn't Exist"))
+
+            conv = Conversation.objects.filter(
+                Q(user1=user, user2=reciever) | Q(user1=reciever, user2=user))
+
+            if (conv.exists()):
+                created = False
+                conv = conv.first()
+            else:
+                created = True
+                conv = Conversation.objects.create(user1=user, user2=reciever)
+
+            message = Message(conversation=conv,
+                              sender=user,
+                              reciever=reciever,
+                              message=message,
+                              replyOf=data['replyof']
+                              )
+            message.save()
+
+            data = MessageSerializer(message, many=False).data
+            data["created"] = created
+            return Response(resp_success("Msg Sent...", data))
+
         else:
-            return Response(resp_fail("Reciever Doesn't Exist"))
+            user = request.user
+            receivers = User.objects.filter(mobile=mobiles)
+            if (receivers.exists()):
+                reciever = receivers.first()
+            else:
+                return Response(resp_fail("Reciever Doesn't Exist"))
 
-        conv = Conversation.objects.filter(
-            Q(user1=user, user2=reciever) | Q(user1=reciever, user2=user))
-        if (conv.exists()):
-            created = False
-            conv = conv.first()
-        else:
-            created = True
-            conv = Conversation.objects.create(user1=user, user2=reciever)
+            conv = Conversation.objects.filter(
+                Q(user1=user, user2=reciever) | Q(user1=reciever, user2=user))
 
-        message = Message(conversation=conv,
-                          sender=user,
-                          reciever=reciever,
-                          message=message,
-                          replyOf=data['replyof']
-                          )
-        message.save()
+            group = GroupChat.objects.filter(created_by=user)
+            if (conv.exists()):
+                created = False
+                conv = conv.first()
+            else:
+                created = True
+                conv = Conversation.objects.create(user1=user, user2=reciever)
 
-        data = MessageSerializer(message, many=False).data
-        data["created"] = created
-        return Response(resp_success("Msg Sent...", data))
+            message = Message(conversation=conv,
+                              sender=user,
+                              reciever=reciever,
+                              message=message,
+                              replyOf=data['replyof']
+                              )
+            message.save()
+
+            data = MessageSerializer(message, many=False).data
+            data["created"] = created
+            return Response(resp_success("Msg Sent...", data))
 
     def update(self, request, *args, **kwargs):
-        return super().update(request, *args, **kwargs)
+        return Response(
+            resp_success("Stared",
+                         request.data))
 
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
 
+    @action(methods=["POST"], detail=False, url_path="star_message")
+    def star_message(self, request):
+        try:
+            message = Message.objects.filter(
+                id=int(request.data['message_id']))[0]
 
-class StatusAPI(ModelViewSet):
-    serializer_class = StatusSerializer
-    permission_classes = [IsAuthenticated]
+            message.isStarred = request.data['isStarred']
 
-    def get_queryset(self):
-        return Status.objects.filter(user=self.request.user)
+            message.save()
+            message = MessageSerializer(
+                message, many=False)
 
-    def retrieve(self, request, *args, **kwargs):
-
-        # current_user = User.objects.filter(id=request.user.id)
-        current_user = UserSerializer(request.user).data
-
-        conversations = list(chain(Conversation.objects.filter(
-            user1=current_user['id']), Conversation.objects.filter(user2=current_user['id'])))
-
-        all_status = Status.objects.all()
-        my_status = Status.objects.filter(user=self.request.user)
-
-        contact_status = []
-        for conversation in conversations:
-            for status in all_status:
-                if (status.user == conversation.user1 or status.user == conversation.user2) & (self.request.user != status.user):
-                    status = StatusSerializer(
-                        status, context={'status_info': status}).data
-                    contact_status.append(status)
-
-        import itertools
-        contact_status = itertools.groupby(
-            contact_status, lambda x: x['user_mobile'])
-
-        grpd_contact_status = []
-        for mobile, status in contact_status:
-            grpd_contact_status.append({mobile: list(status)})
-
-        my_status = StatusSerializer(my_status, many=True,  context={
-            "status_info": None
-        }).data
-
-        return Response(
-            resp_success("Status Featched Successfully", {
-                         "data": {'my_status': my_status, 'contact_status': grpd_contact_status}})
-        )
-
-    # @action('GET', url_path='view-status')
-    # def view_status(self, request):
-    #     return
-
-    # @action('GET', url_path='status-views')
-    # def get_status_views(self, request):
-
-    #     return
-
-    def create(self, request, *args, **kwargs):
-        request.data["user"] = request.user.id
-        status_form = StatusSerializer(
-            data=request.data, context={'status_info': None})
-        if (status_form.is_valid()):
-            status = status_form.save()
             return Response(
-                resp_success("Status Uploaded Successfully",
-                             {"data": status_form.data}))
+                resp_success("Message Starred",
+                             message.data))
+        except Exception:
+            return Response(
+                resp_fail("Failed To Star Message",
+                          {"errors": ''})
+            )
+
+    @action(methods=["POST"], detail=False, url_path="message_status")
+    def message_status(self, request):
+        try:
+            message = Message.objects.filter(
+                id=int(request.data['message_id']))[0]
+
+            statusDict = {
+                'sent': 0,
+                'delivered': 1,
+                'seen': 2
+            }
+
+            message.status = statusDict[request.data['status']]
+
+            message.save()
+            message = MessageSerializer(
+                message, many=False)
+
+            return Response(
+                resp_success("Message Status Changed",
+                             message.data))
+        except Exception:
+            return Response(
+                resp_fail("Failed To Change Message Status",
+                          {"errors": ''}))
+
+    @action(methods=["POST"], detail=False, url_path="send_file")
+    def send_image(self,  request):
+        # request.data["status"] = request.user.id
+        if request.data['isImageFile'] == 'true':
+
+            image_form = ImageSerializer(
+                data=request.data)
+            if (image_form.is_valid()):
+                image_form.save()
+                return Response(
+                    resp_success("Image Send Successfully",
+                                 {"data": image_form.data}))
+            else:
+                return Response(
+                    resp_fail("Failed To Send Image",
+                              {"errors": image_form.errors}))
         else:
-            return Response(
-                resp_fail("Failed To Upload Status",
-                          {"errors": status_form.errors}))
+            document_form = DocumentSerializer(
+                data=request.data)
+            if (document_form.is_valid()):
+                document_form.save()
+                return Response(
+                    resp_success("Document Send Successfully",
+                                 {"data": document_form.data}))
+            else:
+                return Response(
+                    resp_fail("Failed To Send Image",
+                              {"errors": document_form.errors}))

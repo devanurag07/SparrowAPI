@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "chats",
+    "statuses"
 
 ]
 
@@ -60,7 +61,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+
 ROOT_URLCONF = 'sparrow.urls'
+WSGI_APPLICATION = 'sparrow.wsgi.application'
+ASGI_APPLICATION = 'sparrow.asgi.application'
 
 TEMPLATES = [
     {
@@ -78,8 +82,6 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'sparrow.wsgi.application'
-
 
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
@@ -91,7 +93,6 @@ DATABASES = {
     }
 }
 
-ASGI_APPLICATION = "sparrow.asgi.application"
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",

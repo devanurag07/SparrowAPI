@@ -4,17 +4,8 @@ from sparrow.utils import get_model
 from accounts.models import User
 from .models import WSClient, SignallingWSClient
 from channels.db import database_sync_to_async
-from .models import Message, Status
-from django.db.models import Q
-from chats.serializers import MessageSerializer
-from asgiref.sync import sync_to_async
-from .websocket_constants import SDP_RECEIVE, CHAT_RECEIVE
-from .middleware import get_user, get_user_sync
-
-
-from channels.middleware import BaseMiddleware
-from django.db import close_old_connections
-from django.contrib.auth.models import AnonymousUser
+from .websocket_constants import *
+from .middleware import get_user
 from jwt import decode as jwt_decode
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.tokens import UntypedToken
@@ -59,12 +50,16 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
                 "payload": text_data
             })
 
-            if (event_type == SDP_RECEIVE):
-                await self.send(json.dumps({"status": "online"}))
+            if (event_type == CHAT_STATUS):
+                await self.send(json.dumps({"status": "online", "event_type": "chat.status"}))
+            elif (event_type == SDP_RECEIVE):
+                await self.send(json.dumps({"status": "online", "event_type": "chat.status"}))
         else:
             print("Hey")
+            if (event_type == CHAT_STATUS):
+                await self.send(json.dumps({"status": "offline", "event_type": "chat.status"}))
             if (event_type == SDP_RECEIVE):
-                await self.send(json.dumps({"status": "offline"}))
+                await self.send(json.dumps({"status": "offline", "event_type": "chat.status"}))
 
     async def chat_receive(self, text_data):
         data = text_data['payload']
@@ -76,6 +71,18 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
         data = text_data["payload"]
         data = json.loads(data)
         data["event_type"] = SDP_RECEIVE
+        await self.send(json.dumps(data))
+
+    async def chat_status(self, text_data):
+        data = text_data["payload"]
+        data = json.loads(data)
+        data["event_type"] = CHAT_STATUS
+        await self.send(json.dumps(data))
+
+    async def message_status(self, text_data):
+        data = text_data["payload"]
+        data = json.loads(data)
+        data["event_type"] = MESSAGE_STATUS
         await self.send(json.dumps(data))
 
     @database_sync_to_async
@@ -113,6 +120,7 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
 OFFER = "rtc.offer"
 ANSWER = "rtc.answer"
 CANDIDATE = "rtc.candidate"
+REMOTE = "rtc.remote"  # when remote config change (video on/ff)
 
 
 class Signalling(WebsocketConsumer):
@@ -200,6 +208,9 @@ class Signalling(WebsocketConsumer):
         self.send(json.dumps(text_data))
 
     def rtc_reject(self, text_data):
+        self.send(json.dumps(text_data))
+
+    def rtc_remote(self, text_data):
         self.send(json.dumps(text_data))
 
     def get_channel(self, mobile):
