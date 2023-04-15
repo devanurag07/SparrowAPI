@@ -8,13 +8,14 @@ from .models import Conversation, Message, GroupChat
 from sparrow.utils import resp_fail, resp_success
 from django.db.models import Q
 from sparrow.utils import required_data
-from .serializers import MessageSerializer, ImageSerializer, DocumentSerializer
+from .serializers import MessageSerializer, ImageSerializer, DocumentSerializer, GroupChatSerializer
 from accounts.models import User
 from rest_framework.decorators import action
 from rest_framework import status
 from sparrow.utils import phone_format
+import os
 from .models import DeletedConversation
-from .utils import get_conv_messages
+from .utils import get_conv_messages, get_group_messages
 # Create your views here.
 
 
@@ -33,14 +34,25 @@ class ConversationAPI(ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         conversations = self.get_queryset()
+        groups = GroupChat.objects.filter(users=request.user)
 
-        data = ConversationSerializer(conversations,
-                                      many=True,
-                                      context={
-                                          "request": request
-                                      }).data
+        conversations = ConversationSerializer(conversations,
+                                               many=True,
+                                               context={
+                                                   "request": request
+                                               }).data
+        groups = GroupChatSerializer(groups, many=True, context={
+            "request": request
+        }).data
+
+        sorted_convs_groups = sorted(conversations+groups, reverse=True, key=lambda conv: list(
+            map(float,
+                (conv['last_message']['timestamp'].replace(' ', ':').replace('-', ':').split(':')
+                 ) if conv['last_message'] != {} else conv['created_at'].replace('T', ':').replace('-', ':').split(':')
+                )))
+
         return Response(
-            resp_success("Conversations Fetched Successfully", {"data": data}))
+            resp_success("Conversations Fetched Successfully", {"data": sorted_convs_groups}))
 
     def retrieve(self, request, pk=None, *args, **kwargs):
         if (not pk):
@@ -128,7 +140,7 @@ class ConversationAPI(ModelViewSet):
 
         return Response(resp_fail("Conversation ID Required."))
 
-    @action(methods=["POST"], detail=False, url_path="get_available_users")
+    @ action(methods=["POST"], detail=False, url_path="get_available_users")
     def get_available_users(self, request):
         data = request.data
         success, req_data = required_data(data, ["numbers_list"])
@@ -203,11 +215,12 @@ class ConversationAPI(ModelViewSet):
         else:
             return Response(resp_fail("Invalid Mobile Numbers...."))
 
-    @action(methods=["POST"], detail=False, url_path="get_conv")
+    @ action(methods=["POST"], detail=False, url_path="get_conv")
     def get_conv(self, request):
 
         class ConvSerializer(serializers.ModelSerializer):
-            messages = MessageSerializer(many=True)
+            messages = serializers.SerializerMethodField(
+                read_only=True)
             receiver_info = serializers.SerializerMethodField(read_only=True)
             avatar = serializers.SerializerMethodField(read_only=True)
 
@@ -237,6 +250,11 @@ class ConversationAPI(ModelViewSet):
                     return '/media/' + instance.user2.profile_pic.name
                 else:
                     return '/media/' + instance.user1.profile_pic.name
+
+            def get_messages(self, instance):
+
+                messages = get_conv_messages(instance, request.user)
+                return MessageSerializer(messages, many=True).data
 
             class Meta:
                 model = Conversation
@@ -269,6 +287,244 @@ class ConversationAPI(ModelViewSet):
         return Response(
             resp_success("Response Doesn't Exists...", data={"exists": False}))
 
+    @ action(methods=["POST"], detail=False, url_path="get_group")
+    def get_group(self, request):
+        class GroupChatSerializer(serializers.ModelSerializer):
+            messages = serializers.SerializerMethodField(read_only=True)
+            group_profile = serializers.SerializerMethodField(read_only=True)
+            users = serializers.SerializerMethodField(read_only=True)
+            admins = serializers.SerializerMethodField(read_only=True)
+
+            def get_group_profile(self, instance):
+                return '/media/' + instance.group_profile.name
+
+            def get_users(self, instance):
+                users_mobile = []
+
+                for user in instance.users.all():
+                    users_mobile.append(user.mobile)
+                return users_mobile
+
+            def get_admins(self, instance):
+                admins_mobile = []
+                for admin in instance.admins.all():
+                    admins_mobile.append(admin.mobile)
+                return admins_mobile
+
+            def get_messages(self, instance):
+
+                messages = get_group_messages(instance, request.user)
+                return MessageSerializer(messages, many=True).data
+
+            class Meta:
+                model = GroupChat
+                fields = "__all__"
+
+        data = request.data
+        success, req_data = required_data(data, ["group_id"])
+        if (not success):
+            errors = req_data
+            return Response(resp_fail("Invalid Data Provided", data=errors))
+
+        group_id, = req_data
+        groups = GroupChat.objects.filter(id=int(group_id))
+
+        if (groups.exists()):
+            group = groups.first()
+            data = GroupChatSerializer(group,
+                                       many=False,
+                                       context={
+                                           "request": request
+                                       }).data
+
+            return Response(
+                resp_success("Group Fetched...",
+                             data={
+                                 "exists": True,
+                                 "group": data
+                             }))
+        return Response(
+            resp_success("Response Doesn't Exists...", data={"exists": False}))
+
+    @ action(methods=["POST"], detail=False, url_path="create_group")
+    def create_group(self, request):
+        data = request.data
+        success, req_data = required_data(
+            data, ["mobiles", "admins", "group_name"])
+        if (not success):
+            return Response(resp_fail("[Mobiles , Admins, Group Name] Required.."))
+
+        mobiles, admins, group_name = req_data
+
+        receivers = []
+        admins = []
+
+        # { mobiles, message, admins }
+
+        for mobile in mobiles:
+            receiver = User.objects.filter(mobile=mobile)
+
+            if (receiver.exists()):
+                reciever = receiver.first()
+                receivers.append(reciever)
+            else:
+                return Response(resp_fail("One Of Reciever Doesn't Exist"))
+
+        for mobile in admins:
+            admin = User.objects.filter(mobile=mobile)
+
+            if (admin.exists()):
+                admin = admin.first()
+                admins.append(admin)
+            else:
+                return Response(resp_fail("One Of Admin Doesn't Exist"))
+
+        group = GroupChat.objects.create(
+            group_name=group_name, created_by=request.user)
+
+        group.users.set(receivers)
+        group.admins.set(admins)
+
+        group.save()
+
+        data = GroupChatSerializer(group, many=False, context={
+            "request": request}).data
+        data["created"] = True
+        return Response(resp_success("Group Created", data))
+
+    @action(methods=["POST"], detail=False, url_path="update_group")
+    def update_group(self, request, *args, **kwargs):
+        data = self.request.data
+
+        if len(data) == 0:
+            return resp_fail("No Data Found")
+
+        group = GroupChat.objects.filter(id=data['group_id'])
+        if (not group.exists()):
+            return Response(
+                resp_fail("Group Does Not Exists"))
+
+        group = group.first()
+        if request.user not in group.admins.all():
+            return Response(
+                resp_fail("User Is Not Admin"))
+
+        if 'admins' in data:
+            admins = []
+            for mobile in data['admins']:
+                admin = User.objects.filter(mobile=mobile)
+
+                if (admin.exists()):
+                    admin = admin.first()
+                    admins.append(admin)
+                else:
+                    return Response(resp_fail("One Of Admin Doesn't Exist"))
+
+            group.admins.set(admins)
+
+        if 'users' in data:
+            users = []
+            for mobile in data['users']:
+                user = User.objects.filter(mobile=mobile)
+
+                if (user.exists()):
+                    user = user.first()
+                    users.append(user)
+                else:
+                    return Response(resp_fail("One Of User Doesn't Exist"))
+
+            group.users.set(users)
+
+        group = GroupChatSerializer(
+            group, data=data,  partial=True, context={'request': request})
+
+        if group.is_valid():
+            group.save()
+            return Response(
+                resp_success("Group Updated Succesfully", {"data": group.data}))
+
+        return Response(
+            resp_fail("Failed To Update Group"))
+
+    @action(methods=["POST"], detail=False, url_path="update_group_profile")
+    def update_group_profile(self, request, *args, **kwargs):
+        data = self.request.data
+
+        group = GroupChat.objects.filter(id=data['group_id'])
+        if (not group.exists()):
+            return Response(
+                resp_fail("Group Does Not Exists"))
+        group = group.first()
+        if request.user not in group.admins.all():
+            return Response(
+                resp_fail("User Is Not Admin "))
+
+        class GroupChatSerializer(serializers.ModelSerializer):
+
+            class Meta:
+                model = GroupChat
+                fields = "__all__"
+
+        group = GroupChatSerializer(
+            group, data=data, partial=True, context={'request': request})
+
+        # remove old profile pic
+        if (group.is_valid()):
+            try:
+                old_group = GroupChatSerializer(group, context={'request': request}
+                                                ).data
+
+                if old_group['group_profile'].split('/')[3] != 'default-group.jpg':
+                    file_path = old_group['group_profile']
+                    os.remove(file_path[1:])
+            except Exception:
+                resp_fail("Failed To Change Profile",
+                          {"errors": group.errors})
+            group.save()
+            return Response(
+                resp_success("Profile Pic Uploaded Successfully",
+                             {"data": group.data}))
+        else:
+            return Response(
+                resp_fail("Failed To Change Profile Pic",
+                          {"errors": group.errors}))
+
+    @action(methods=["DELETE"], detail=False, url_path="remove_group_profile")
+    def remove_group_profile(self, request, *args, **kwargs):
+        data = self.request.data
+
+        group = GroupChat.objects.filter(id=data['group_id'])
+        if (not group.exists()):
+            return Response(
+                resp_fail("Group Does Not Exists"))
+        group = group.first()
+        if request.user not in group.admins.all():
+            return Response(
+                resp_fail("User Is Not Admin "))
+
+        for f in group._meta.fields:
+            if f.name == 'group_profile':
+                setattr(group, f.name, f.default)
+
+        # remove old profile pic
+        try:
+            old_group = GroupChatSerializer(group, context={'request': request}
+                                            ).data
+
+            if old_group['group_profile'].split('/')[3] != 'default-group.jpg':
+                file_path = old_group['group_profile']
+                os.remove(file_path[1:])
+        except Exception:
+            resp_fail("Failed To Remove Profile",
+                      {"errors": group})
+
+        group.save()
+        data = GroupChatSerializer(group, context={'request': request}).data
+
+        return Response(
+            resp_success("Profile Removed Successfully",
+                         {"data": data}))
+
 
 class ChatAPI(ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -285,13 +541,13 @@ class ChatAPI(ModelViewSet):
     def create(self, request, *args, **kwargs):
         data = request.data
         success, req_data = required_data(
-            data, ["mobile", "message"])
+            data, ["mobiles", "message"])
         if (not success):
-            return Response(resp_fail("[Mobile , Message] Required.."))
+            return Response(resp_fail("[Mobiles , Message] Required.."))
 
         mobiles, message = req_data
+        user = request.user
         if len(mobiles) == 1:
-            user = request.user
             receivers = User.objects.filter(mobile=mobiles[0])
             if (receivers.exists()):
                 reciever = receivers.first()
@@ -308,12 +564,13 @@ class ChatAPI(ModelViewSet):
                 created = True
                 conv = Conversation.objects.create(user1=user, user2=reciever)
 
-            message = Message(conversation=conv,
-                              sender=user,
-                              reciever=reciever,
-                              message=message,
-                              replyOf=data['replyof']
-                              )
+            message = Message.objects.create(conversation=conv,
+                                             sender=user,
+                                             message=message,
+                                             replyOf=data['replyof']
+                                             )
+
+            message.recievers.set([receivers.first()])
             message.save()
 
             data = MessageSerializer(message, many=False).data
@@ -321,30 +578,29 @@ class ChatAPI(ModelViewSet):
             return Response(resp_success("Msg Sent...", data))
 
         else:
-            user = request.user
-            receivers = User.objects.filter(mobile=mobiles)
-            if (receivers.exists()):
-                reciever = receivers.first()
-            else:
-                return Response(resp_fail("Reciever Doesn't Exist"))
+            receivers = []
 
-            conv = Conversation.objects.filter(
-                Q(user1=user, user2=reciever) | Q(user1=reciever, user2=user))
+            for mobile in mobiles:
+                receiver = User.objects.filter(mobile=mobile)
 
-            group = GroupChat.objects.filter(created_by=user)
-            if (conv.exists()):
+                if (receiver.exists()):
+                    reciever = receiver.first()
+                    receivers.append(reciever)
+                else:
+                    return Response(resp_fail("One Of Reciever Doesn't Exist"))
+
+            group = GroupChat.objects.filter(id=data["group_id"])
+            if (group.exists()):
                 created = False
-                conv = conv.first()
-            else:
-                created = True
-                conv = Conversation.objects.create(user1=user, user2=reciever)
+                group = group.first()
 
-            message = Message(conversation=conv,
-                              sender=user,
-                              reciever=reciever,
-                              message=message,
-                              replyOf=data['replyof']
-                              )
+            message = Message.objects.create(group=group,
+                                             sender=user,
+                                             message=message,
+                                             replyOf=data['replyof']
+                                             )
+
+            message.recievers.set(receivers)
             message.save()
 
             data = MessageSerializer(message, many=False).data
@@ -359,7 +615,7 @@ class ChatAPI(ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
 
-    @action(methods=["POST"], detail=False, url_path="star_message")
+    @ action(methods=["POST"], detail=False, url_path="star_message")
     def star_message(self, request):
         try:
             message = Message.objects.filter(
@@ -380,7 +636,7 @@ class ChatAPI(ModelViewSet):
                           {"errors": ''})
             )
 
-    @action(methods=["POST"], detail=False, url_path="message_status")
+    @ action(methods=["POST"], detail=False, url_path="message_status")
     def message_status(self, request):
         try:
             message = Message.objects.filter(
@@ -406,7 +662,7 @@ class ChatAPI(ModelViewSet):
                 resp_fail("Failed To Change Message Status",
                           {"errors": ''}))
 
-    @action(methods=["POST"], detail=False, url_path="send_file")
+    @ action(methods=["POST"], detail=False, url_path="send_file")
     def send_image(self,  request):
         # request.data["status"] = request.user.id
         if request.data['isImageFile'] == 'true':

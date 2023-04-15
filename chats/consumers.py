@@ -18,7 +18,6 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         # Adding User to Channel
-
         self.user = self.scope["user"]
         isAuth = wsIsAuthenticated(self)
 
@@ -85,6 +84,18 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
         data["event_type"] = MESSAGE_STATUS
         await self.send(json.dumps(data))
 
+    async def message_delete(self, text_data):
+        data = text_data["payload"]
+        data = json.loads(data)
+        data["event_type"] = MESSAGE_DELETE
+        await self.send(json.dumps(data))
+
+    async def message_star(self, text_data):
+        data = text_data["payload"]
+        data = json.loads(data)
+        data["event_type"] = MESSAGE_STAR
+        await self.send(json.dumps(data))
+
     @database_sync_to_async
     def get_channel(self, mobile):
         channels = WSClient.objects.filter(user__mobile=int(mobile))
@@ -107,6 +118,7 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def add_user(self):
         self.clean_user()
+
         WSClient.objects.create(user=self.user, channel_name=self.channel_name)
 
     @database_sync_to_async
@@ -116,7 +128,6 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
 
 
 # Signalling Constants
-
 OFFER = "rtc.offer"
 ANSWER = "rtc.answer"
 CANDIDATE = "rtc.candidate"

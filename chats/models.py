@@ -16,10 +16,13 @@ class Conversation(models.Model):
 
 
 class GroupChat(models.Model):
-    conv_name = models.CharField(max_length=255)
-    users = models.ManyToManyField(User)
-    admins = models.ManyToManyField(User)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    group_name = models.CharField(max_length=255)
+    group_profile = models.ImageField(upload_to="profilepics",
+                                      default="profilepics/default-group.jpg")
+    users = models.ManyToManyField(User, related_name='group')
+    admins = models.ManyToManyField(User, related_name='admin_of')
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='creator_of')
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -30,8 +33,9 @@ class Message(models.Model):
         GroupChat, on_delete=models.CASCADE, related_name="messages", null=True)
     sender = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="sent_messages")
-    reciever = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="received_messages")
+    # reciever = models.ForeignKey(
+    #     User, on_delete=models.CASCADE, related_name="received_messages")
+    recievers = models.ManyToManyField(User, related_name='received_messages')
     message = models.TextField()
     isStarred = models.BooleanField(default=False)
     replyOf = models.TextField(null=True)
@@ -62,6 +66,14 @@ class Image(models.Model):
 # WebSockets --Models
 class WSClient(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    channel_name = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class GroupWSClient(models.Model):
+    group = models.ForeignKey(GroupChat, on_delete=models.CASCADE)
+    users = models.ManyToManyField(User, related_name='ws_group')
+
     channel_name = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 

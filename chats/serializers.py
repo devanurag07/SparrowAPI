@@ -1,14 +1,15 @@
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from .models import Conversation, Document, Image, Message
-from .utils import get_conv_messages
+from .models import Conversation, Document, Image, Message, GroupChat
+from .utils import get_conv_messages, get_group_messages
 
 
 class MessageSerializer(ModelSerializer):
 
     status = serializers.SerializerMethodField(read_only=True)
     document = serializers.SerializerMethodField(read_only=True)
+    sender = serializers.SerializerMethodField(read_only=True)
 
     def get_status(self, instance):
 
@@ -35,6 +36,9 @@ class MessageSerializer(ModelSerializer):
             return doc
         else:
             return
+
+    def get_sender(self, instance):
+        return instance.sender.mobile
 
     class Meta:
         model = Message
@@ -75,11 +79,11 @@ class ConversationSerializer(ModelSerializer):
     def get_last_message(self, instance):
         current_user = self.context["request"].user
         messages = get_conv_messages(instance, current_user)
-
         if (messages.exists()):
             last_message = messages.order_by("-created_at").first()
             msg_status = last_message.status
-            msg_time = str(last_message.created_at.time())
+            msg_time = "{:s} {:s}".format(
+                str(last_message.created_at.date()), str(last_message.created_at.time()))
 
             status_text = ''
             if (msg_status == 0):
@@ -114,4 +118,57 @@ class DocumentSerializer(ModelSerializer):
 
     class Meta:
         model = Document
+        fields = "__all__"
+
+
+class GroupChatSerializer(ModelSerializer):
+    last_message = serializers.SerializerMethodField(read_only=True)
+    group_profile = serializers.SerializerMethodField(read_only=True)
+    users = serializers.SerializerMethodField(read_only=True)
+    admins = serializers.SerializerMethodField(read_only=True)
+
+    def get_last_message(self, instance):
+        current_user = self.context["request"].user
+        messages = get_group_messages(instance, current_user)
+
+        if (messages.exists()):
+            last_message = messages.order_by("-created_at").first()
+            msg_status = last_message.status
+            msg_time = "{:s} {:s}".format(
+                str(last_message.created_at.date()), str(last_message.created_at.time()))
+
+            status_text = ''
+            if (msg_status == 0):
+                status_text = "sent"
+            elif msg_status == 1:
+                msg_status = "delivered"
+            elif msg_status == 2:
+                status_text = "seen"
+
+            return {
+                "message": last_message.message,
+                "status": status_text,
+                "timestamp": msg_time,
+                "sender": last_message.sender.id
+            }
+        else:
+            return {}
+
+    def get_group_profile(self, instance):
+        return '/media/' + instance.group_profile.name
+
+    def get_users(self, instance):
+        users_mobile = []
+        for user in instance.users.all():
+            users_mobile.append(user.mobile)
+        return users_mobile
+
+    def get_admins(self, instance):
+        admins_mobile = []
+        for admin in instance.admins.all():
+            admins_mobile.append(admin.mobile)
+        return admins_mobile
+
+    class Meta:
+        model = GroupChat
         fields = "__all__"
