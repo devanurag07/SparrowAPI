@@ -60,3 +60,21 @@ class LoginOtp(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     history = HistoricalRecords()
+
+
+class ChangeNumberOtp(models.Model):
+    otp = models.IntegerField()
+    mobile = models.BigIntegerField()
+    attempts = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    history = HistoricalRecords()
+
+
+class DeleteUserOtp(models.Model):
+    otp = models.IntegerField()
+    mobile = models.BigIntegerField()
+    attempts = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    history = HistoricalRecords()

@@ -42,7 +42,8 @@ class StatusAPI(ModelViewSet):
         for mobile, status in contact_status:
             grpd_contact_status.append({mobile: list(status)})
 
-        my_status = StatusSerializer(my_status, many=True).data
+        my_status = StatusSerializer(my_status, many=True, context={
+                                     'status_info': my_status.first()}).data
 
         return Response(
             resp_success("Status Featched Successfully", {

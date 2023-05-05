@@ -7,6 +7,7 @@ from rest_framework import serializers
 class StatusSerializer(ModelSerializer):
 
     user_mobile = serializers.SerializerMethodField(read_only=True)
+    user_profile = serializers.SerializerMethodField(read_only=True)
     views = serializers.SerializerMethodField(read_only=True)
 
     def get_user_mobile(self, instance):
@@ -15,6 +16,13 @@ class StatusSerializer(ModelSerializer):
 
         status_info = self.context['status_info']
         return status_info.user.mobile
+
+    def get_user_profile(self, instance):
+        if ('status_info' not in self.context):
+            return ''
+
+        status_info = self.context['status_info']
+        return '/media/' + status_info.user.profile_pic.name
 
     def get_views(self, instance):
 

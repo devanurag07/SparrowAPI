@@ -39,31 +39,40 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
 
     async def receive(self, text_data='', bytes_data=None, **kwargs):
         data = json.loads(text_data)
-        receiver_mobile = data["receiver_mobile"]
-        event_type = data["event_type"]
-        receiver_channel_name = await self.get_channel(receiver_mobile)
 
-        if (receiver_channel_name):
-            await self.channel_layer.send(receiver_channel_name, {
-                "type": event_type,
-                "payload": text_data
-            })
+        receivers_mobile = data["receivers_mobile"]
 
-            if (event_type == CHAT_STATUS):
-                await self.send(json.dumps({"status": "online", "event_type": "chat.status"}))
-            elif (event_type == SDP_RECEIVE):
-                await self.send(json.dumps({"status": "online", "event_type": "chat.status"}))
-        else:
-            print("Hey")
-            if (event_type == CHAT_STATUS):
-                await self.send(json.dumps({"status": "offline", "event_type": "chat.status"}))
-            if (event_type == SDP_RECEIVE):
-                await self.send(json.dumps({"status": "offline", "event_type": "chat.status"}))
+        for receiver_mobile in receivers_mobile:
+            event_type = data["event_type"]
+            receiver_channel_name = await self.get_channel(receiver_mobile)
+
+            if (receiver_channel_name):
+                await self.channel_layer.send(receiver_channel_name, {
+                    "type": event_type,
+                    "payload": text_data
+                })
+
+                if (event_type == CHAT_STATUS):
+                    await self.send(json.dumps({"status": "online", "event_type": "chat.status"}))
+                elif (event_type == SDP_RECEIVE):
+                    await self.send(json.dumps({"status": "online", "event_type": "chat.status"}))
+            else:
+                print("Hey")
+                if (event_type == CHAT_STATUS):
+                    await self.send(json.dumps({"status": "offline", "event_type": "chat.status"}))
+                if (event_type == SDP_RECEIVE):
+                    await self.send(json.dumps({"status": "offline", "event_type": "chat.status"}))
 
     async def chat_receive(self, text_data):
         data = text_data['payload']
         data = json.loads(data)
         data["event_type"] = CHAT_RECEIVE
+        await self.send(json.dumps(data))
+
+    async def group_chat_receive(self, text_data):
+        data = text_data['payload']
+        data = json.loads(data)
+        data["event_type"] = GROUP_CHAT_RECEIVE
         await self.send(json.dumps(data))
 
     async def sdp_receive(self, text_data):
@@ -118,12 +127,22 @@ class ChatChannel(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def add_user(self):
         self.clean_user()
+        # adding user to groups
+        # for group in self.user.group.all():
+        #     async_to_sync(self.channel_layer.group_add)(
+        #         str(group.id), self.channel_name
+        #     )
 
         WSClient.objects.create(user=self.user, channel_name=self.channel_name)
 
     @database_sync_to_async
     def clean_user(self):
         print("Cleaned")
+        for group in self.user.group.all():
+            async_to_sync(self.channel_layer.group_discard)(
+                str(group.id), self.channel_name
+            )
+
         WSClient.objects.filter(user=self.user).delete()
 
 
@@ -132,6 +151,7 @@ OFFER = "rtc.offer"
 ANSWER = "rtc.answer"
 CANDIDATE = "rtc.candidate"
 REMOTE = "rtc.remote"  # when remote config change (video on/ff)
+GROUP_CALL = "group.meeting"
 
 
 class Signalling(WebsocketConsumer):
@@ -175,7 +195,7 @@ class Signalling(WebsocketConsumer):
         print("Authenticated")
 
     def receive(self, text_data='', bytes_data=None, **kwargs):
-        import pdb
+
         data = json.loads(text_data)
         event_type = data["type"]
         print("Sending ")
@@ -187,26 +207,37 @@ class Signalling(WebsocketConsumer):
             return
 
         data['mobile'] = self.user.mobile
-        receiver_mobile = data["receiver"]
-        receiver_channel_name = self.get_channel(receiver_mobile)
+        receivers_mobile = data["receivers"]
+        for receiver_mobile in receivers_mobile:
+            receiver_channel_name = self.get_channel(receiver_mobile)
 
-        if (receiver_channel_name):
-            print(f"Sending To {receiver_mobile}")
-            print(f"CHANNEL_NAME : {receiver_channel_name}")
+            if (receiver_channel_name):
+                print(f"Sending To {receiver_mobile}")
+                print(f"CHANNEL_NAME : {receiver_channel_name}")
 
-            async_to_sync(self.channel_layer.send)(receiver_channel_name, data)
+                async_to_sync(self.channel_layer.send)(
+                    receiver_channel_name, data)
 
-            if (event_type == OFFER):
-                self.send(json.dumps({"status": "online", "type": "status"}))
-            return
-        else:
-            if (event_type == OFFER):
-                self.send(json.dumps({"status": "offline", "type": "status"}))
+                if (event_type == OFFER):
+                    self.send(json.dumps(
+                        {"status": "online", "type": "status"}))
+                return
+            else:
+                if (event_type == OFFER):
+                    self.send(json.dumps(
+                        {"status": "offline", "type": "status"}))
 
     def rtc_offer(self, text_data):
         print("Offer Getting")
-        mobile = text_data['receiver']
-        print(f"Calling - {mobile}")
+        mobiles = text_data['receivers']
+        for mobile in mobiles:
+            print(f"Calling - {mobile}")
+        self.send(json.dumps(text_data))
+
+    def group_meeting(self, text_data):
+        mobiles = text_data['receivers']
+        for mobile in mobiles:
+            print(f"Calling - {mobile}")
         self.send(json.dumps(text_data))
 
     def rtc_answer(self, text_data):

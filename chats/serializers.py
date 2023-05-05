@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from .models import Conversation, Document, Image, Message, GroupChat
+from .models import *
 from .utils import get_conv_messages, get_group_messages
 
 
@@ -10,6 +10,7 @@ class MessageSerializer(ModelSerializer):
     status = serializers.SerializerMethodField(read_only=True)
     document = serializers.SerializerMethodField(read_only=True)
     sender = serializers.SerializerMethodField(read_only=True)
+    sender_id = serializers.SerializerMethodField(read_only=True)
 
     def get_status(self, instance):
 
@@ -39,6 +40,9 @@ class MessageSerializer(ModelSerializer):
 
     def get_sender(self, instance):
         return instance.sender.mobile
+
+    def get_sender_id(self, instance):
+        return instance.sender.id
 
     class Meta:
         model = Message
@@ -171,4 +175,43 @@ class GroupChatSerializer(ModelSerializer):
 
     class Meta:
         model = GroupChat
+        fields = "__all__"
+
+
+class GroupChatSerializerMessages(serializers.ModelSerializer):
+    messages = serializers.SerializerMethodField(read_only=True)
+    group_profile = serializers.SerializerMethodField(read_only=True)
+    users = serializers.SerializerMethodField(read_only=True)
+    admins = serializers.SerializerMethodField(read_only=True)
+
+    def get_group_profile(self, instance):
+        return '/media/' + instance.group_profile.name
+
+    def get_users(self, instance):
+        users_mobile = []
+
+        for user in instance.users.all():
+            users_mobile.append(user.mobile)
+        return users_mobile
+
+    def get_admins(self, instance):
+        admins_mobile = []
+        for admin in instance.admins.all():
+            admins_mobile.append(admin.mobile)
+        return admins_mobile
+
+    def get_messages(self, instance):
+
+        messages = get_group_messages(instance, self.context["request"].user)
+        return MessageSerializer(messages, many=True).data
+
+    class Meta:
+        model = GroupChat
+        fields = "__all__"
+
+
+class CallLogSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = CallLog
         fields = "__all__"

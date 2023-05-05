@@ -3,4 +3,4 @@ from .models import *
 # Register your models here.
 
 admin.site.register(
-    [Conversation, Message, DeletedConversation, Image, Document, GroupChat])
+    [Conversation, Message, DeletedConversation, Image, Document, GroupChat, CallLog])

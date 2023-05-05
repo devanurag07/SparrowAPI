@@ -34,7 +34,8 @@ class AuthAPI(ViewSet):
         users_list = User.objects.filter(mobile=mobile)
         user_exist = users_list.exists()
 
-        return send_otp(user_exist, mobile, data)
+        return send_otp(user_exist, mobile, data,
+                        'auth')
 
     @action(methods=["POST"], detail=False, url_path="verify_otp")
     def verify_otp(self, request, *args, **kwargs):
@@ -47,7 +48,7 @@ class AuthAPI(ViewSet):
         mobile, otp = req_data
         users_list = User.objects.filter(mobile=mobile)
 
-        return verify_otp(users_list, mobile, otp)
+        return verify_otp(users_list, mobile, otp, 'auth')
 
 
 class ProfileAPI(ViewSet):
@@ -124,3 +125,50 @@ class ProfileAPI(ViewSet):
         return Response(
             resp_success("Profile Removed Successfully",
                          {"data": data}))
+
+    @action(methods=["POST"], detail=False, url_path="send_otp")
+    def send_otp(self, request, *args, **kwargs):
+        data = request.data
+        success, req_data = required_data(
+            data, ["mobile", "action"])
+        if (not success):
+            return Response(resp_fail("Mobile & action Required "))
+
+        mobile,  action = req_data
+        try:
+            # Verification Goes Here
+            mobile = int(mobile)
+        except Exception as e:
+            return Response(resp_fail("Mobile No. Not Valid.."))
+
+        users_list = User.objects.filter(mobile=mobile)
+        user_exist = users_list.exists()
+
+        if action == 'change-number':
+            return send_otp(user_exist, int(data['new_mobile']), data, action)
+        elif action == 'delete-user':
+            return send_otp(user_exist, mobile, data, action)
+
+    @action(methods=["POST"], detail=False, url_path="verify_otp")
+    def verify_otp(self, request, *args, **kwargs):
+        data = request.data
+
+        success, req_data = required_data(
+            data, ["mobile", "otp", "action"])
+
+        if (not success):
+            return Response(resp_fail("[mobile,otp, action] Is Required ..."))
+
+        mobile, otp, action = req_data
+        try:
+            # Verification Goes Here
+            mobile = int(mobile)
+        except Exception as e:
+            return Response(resp_fail("Mobile No. Not Valid.."))
+
+        users_list = User.objects.filter(mobile=mobile)
+
+        if action == 'change-number':
+            return verify_otp(users_list, int(data['new_mobile']), otp,  action)
+        elif action == 'delete-user':
+            return verify_otp(users_list, mobile, otp,  action)
