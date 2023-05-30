@@ -5,7 +5,9 @@ from sparrow.utils import resp_fail, resp_success, required_data
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserSerializer
 import os
-from twilio.rest import Client
+
+
+import requests
 
 
 def delete_otps(user_exist, mobile):
@@ -15,23 +17,10 @@ def delete_otps(user_exist, mobile):
         OtpTempData.objects.filter(mobile=mobile).delete()
 
 
-# def send_otp_sms(otp, mobile):
-#     account_sid = "AC9be992c415f98c506d4e4314d418b09d"
-#     # auth_token = os.environ["TWILIO_AUTH_TOKEN"]
-#     auth_token = "894f9441c431345330bb4d1151ee9925"
-#     verified_number = "+919381256574"
+def send_otp_sms(mobile, msg):
 
-#     client = Client(account_sid, auth_token)
-
-#     message = client.messages \
-#         .create(
-#             body="Test",
-#             from_=verified_number,
-#             to='+917053904411'
-#         )
-
-#     print(message.status)
-#     return
+    requests.get(
+        url=f'http://sms.domainadda.com/vendorsms/pushsms.aspx?user=kotasaketh&password=123456&msisdn={mobile}&sid=152535&msg={msg}&fl=0&gwid=2')
 
 
 def send_otp(user_exist, mobile, data, request_type):

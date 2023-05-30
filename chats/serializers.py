@@ -212,6 +212,38 @@ class GroupChatSerializerMessages(serializers.ModelSerializer):
 
 class CallLogSerializer(serializers.ModelSerializer):
 
+    group = serializers.SerializerMethodField(read_only=True)
+    conversation = serializers.SerializerMethodField(read_only=True)
+    avatar = serializers.SerializerMethodField(read_only=True)
+
+    def get_group(self, instance):
+        if instance.group:
+            return instance.group.group_name
+        else:
+            return
+
+    def get_conversation(self, instance):
+        if instance.conversation:
+            current_user = self.context["request"].user
+
+            if (current_user == instance.conversation.user1):
+                return instance.conversation.user2.mobile
+            else:
+                return instance.conversation.user1.mobile
+        else:
+            return
+
+    def get_avatar(self, instance):
+        if instance.group:
+            return '/media/' + instance.group.group_profile.name
+        else:
+            current_user = self.context["request"].user
+
+            if (current_user == instance.conversation.user1):
+                return '/media/' + instance.conversation.user2.profile_pic.name
+            else:
+                return '/media/' + instance.conversation.user1.profile_pic.name
+
     class Meta:
         model = CallLog
         fields = "__all__"

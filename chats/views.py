@@ -834,9 +834,10 @@ class CallsAPI(ModelViewSet):
     @action(methods=["GET"], detail=False, url_path="logs")
     def logs(self, request):
         logs = CallLog.objects.filter(
-            participants=request.user)
+            participants=request.user).order_by('-created_at')
 
-        logs = CallLogSerializer(logs, many=True)
+        logs = CallLogSerializer(
+            logs, many=True,  context={'request': request})
 
         return Response(resp_success('Call Logs Fetched', logs.data))
 
@@ -853,16 +854,14 @@ class CallsAPI(ModelViewSet):
                 log = CallLog.objects.create(
                     group=group, created_by=request.user)
 
-                # import pdb
-                # pdb.set_trace()
-
                 log.participants.set(group.users.all())
 
                 log.save()
 
-                data = CallLogSerializer(log, many=False).data
+                data = CallLogSerializer(log, many=False,  context={
+                                         'request': request}).data
 
-                return Response(resp_success("Logs Saved", data))
+                return Response(resp_success("Call Log Saved", data))
 
             else:
                 return Response(resp_fail("Group Doesn't Exists"))
@@ -874,15 +873,16 @@ class CallsAPI(ModelViewSet):
             if conv.exists:
                 conv = conv.first()
                 log = CallLog.objects.create(
-                    conv=conv, created_by=request.user)
+                    conversation=conv, created_by=request.user)
 
                 log.participants.set([conv.user1, conv.user2])
 
                 log.save()
 
-                data = CallLogSerializer(log, many=False).data
+                data = CallLogSerializer(log, many=False, context={
+                                         'request': request}).data
 
-                return Response(resp_success("Logs Saved", data))
+                return Response(resp_success("Call Log Saved", data))
 
             else:
                 return Response(resp_fail("Conv Doesn't Exists"))
@@ -917,7 +917,6 @@ class CallsAPI(ModelViewSet):
 
         if logs.exists:
             for log in logs:
-                log = log.first()
 
                 log.participants.remove(request.user)
 

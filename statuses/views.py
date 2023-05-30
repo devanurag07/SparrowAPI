@@ -8,6 +8,9 @@ from sparrow.utils import resp_fail, resp_success
 from .models import Status
 from chats.models import Conversation
 from .serializers import UserSerializer
+from datetime import timedelta
+from django.utils import timezone
+from django.db.models import Q
 
 
 class StatusAPI(ModelViewSet):
@@ -23,8 +26,12 @@ class StatusAPI(ModelViewSet):
         conversations = list(chain(Conversation.objects.filter(
             user1=current_user['id']), Conversation.objects.filter(user2=current_user['id'])))
 
-        all_status = Status.objects.all()
-        my_status = Status.objects.filter(user=self.request.user)
+        time_threshold = timezone.now() - timezone.timedelta(hours=24)
+
+        all_status = Status.objects.filter(
+            ~Q(created_at__lt=time_threshold)).all()
+        my_status = Status.objects.filter(
+            ~Q(created_at__lt=time_threshold) & ~Q(user=self.request.user))
 
         contact_status = []
         for conversation in conversations:
